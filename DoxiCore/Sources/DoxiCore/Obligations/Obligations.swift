@@ -43,6 +43,26 @@ public struct ObligationDraft: Hashable, Sendable {
     public var status: ObligationStatus
     public var sourceFieldID: UUID?
     public var source: SourceSpan?
+
+    public init(category: ObligationCategory, title: String, detail: String, amount: Money? = nil, dueDate: CalendarDate? = nil,
+                dueDateExplanation: String? = nil, recurrence: Recurrence? = nil, responsibleParty: String? = nil,
+                counterparty: String? = nil, direction: FinancialDirection = .unknown, directionReason: String? = nil,
+                status: ObligationStatus, sourceFieldID: UUID? = nil, source: SourceSpan? = nil) {
+        self.category = category
+        self.title = title
+        self.detail = detail
+        self.amount = amount
+        self.dueDate = dueDate
+        self.dueDateExplanation = dueDateExplanation
+        self.recurrence = recurrence
+        self.responsibleParty = responsibleParty
+        self.counterparty = counterparty
+        self.direction = direction
+        self.directionReason = directionReason
+        self.status = status
+        self.sourceFieldID = sourceFieldID
+        self.source = source
+    }
 }
 
 public struct ObligationContext: Sendable {

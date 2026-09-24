@@ -17,7 +17,7 @@ struct DocumentDetailView: View {
     var body: some View {
         List {
             headerSection
-            if document.status == .needsReview || document.pendingFieldCount > 0 {
+            if document.status == .needsReview || document.status == .failed || document.pendingFieldCount > 0 {
                 Section {
                     NavigationLink {
                         ReviewView(document: document)
