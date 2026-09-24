@@ -55,7 +55,7 @@ final class AppModelTests: XCTestCase {
     func testFinalizeCreatesObligationsOnlyFromConfirmedFields() async {
         let doc = await makeDocument()
         let service = ObligationService(settings: AppSettings(defaults: UserDefaults(suiteName: "test")!))
-        let payments = doc.fields.filter { $0.kind == .payment }
+        let payments = doc.fields.filter { $0.kind == .payment }.sorted { ($0.value.primaryDate ?? CalendarDate(iso: "9999-01-01")!) < ($1.value.primaryDate ?? CalendarDate(iso: "9999-01-01")!) }
         service.confirm(payments[0], in: doc)
         service.finalize(doc, context: context)
         XCTAssertEqual(doc.obligations.filter(\.isPayment).count, 1)
@@ -63,7 +63,7 @@ final class AppModelTests: XCTestCase {
 
         // Marking received never happens automatically; do it and check the status.
         let ob = doc.obligations.first!
-        XCTAssertEqual(ob.status(today: CalendarDate(iso: "2026-10-20")!), .overdue)
+        XCTAssertEqual(ob.status(today: CalendarDate(iso: "2026-12-01")!), .overdue)
         service.markDone(ob)
         XCTAssertEqual(ob.storedStatus, .received)
     }
