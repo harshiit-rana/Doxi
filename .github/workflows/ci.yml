@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-linux:
+    name: DoxiCore tests + evaluation (Linux)
+    runs-on: ubuntu-latest
+    container: swift:5.10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        working-directory: DoxiCore
+        run: swift test
+      - name: Extraction evaluation (temporary synthetic + holdout sets)
+        working-directory: DoxiCore
+        run: swift run doxi-eval ../Evaluation/datasets/synthetic-temporary ../Evaluation/datasets/synthetic-holdout --today 2026-09-24
+
+  apple:
+    name: iOS app build + tests (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)" && xcodebuild -version
+      - name: DoxiCore + DoxiReader (macOS)
+        working-directory: DoxiCore
+        run: swift build && swift test
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen generate
+      - name: Build and test app
+        run: |
+          set -o pipefail
+          SIM=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]+' | sed 's/ *$//')
+          echo "Simulator: $SIM"
+          xcodebuild -project Doxi.xcodeproj -scheme Doxi \
+            -destination "platform=iOS Simulator,name=$SIM" \
+            CODE_SIGNING_ALLOWED=NO test | tail -200
