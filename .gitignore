@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+Doxi.xcodeproj/
+.swiftpm/
+Evaluation/reports/
+Evaluation/datasets/real/*
+!Evaluation/datasets/real/README.md
