@@ -49,7 +49,7 @@ final class ObligationTests: XCTestCase {
         let rent = ObligationBuilder.build(from: fields, context: ctx).first { $0.category == .payment }
         XCTAssertEqual(rent?.direction, .iOwe)
         XCTAssertEqual(rent?.recurrence?.frequency, .monthly)
-        XCTAssertEqual(rent?.recurrence?.endDate, d("2027-03-01"))
+        XCTAssertEqual(rent?.recurrence?.endDate, d("2027-02-28"))
     }
 
     func testStatusBecomesOverdueButNeverReceived() {

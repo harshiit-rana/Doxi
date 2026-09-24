@@ -1,0 +1,11 @@
+{
+  "document_type": "service_agreement",
+  "parties": ["Northwind Analytics Inc.", "Harshit Rana"],
+  "effective_date": "2026-10-05",
+  "end_date": "2026-12-31",
+  "payments": [
+    {"amount": 3000, "due_date": null, "recurrence": "monthly"}
+  ],
+  "notice_period_days": 14,
+  "renewal_automatic": null
+}

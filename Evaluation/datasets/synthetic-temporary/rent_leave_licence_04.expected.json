@@ -1,0 +1,12 @@
+{
+  "document_type": "rental_agreement",
+  "parties": ["Anjali Deshpande", "Rana Digital Studio"],
+  "effective_date": "2026-07-01",
+  "end_date": "2027-05-31",
+  "payments": [
+    {"amount": 25000, "due_date": "2026-07-05", "recurrence": "monthly"},
+    {"amount": 75000, "due_date": null}
+  ],
+  "notice_period_days": 30,
+  "renewal_automatic": false
+}

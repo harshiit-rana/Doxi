@@ -1,0 +1,14 @@
+{
+  "document_type": "vendor_agreement",
+  "parties": ["Urban Threads Retail Private Limited", "Rana Digital Studio"],
+  "effective_date": "2026-11-15",
+  "end_date": "2027-11-14",
+  "payments": [
+    {"amount": 100000, "due_date": "2026-12-15"},
+    {"amount": 100000, "due_date": "2027-03-15"},
+    {"amount": 50000, "due_date": "2027-06-15"}
+  ],
+  "notice_period_days": 90,
+  "renewal_automatic": true,
+  "identifiers": ["ABCPR1234K"]
+}

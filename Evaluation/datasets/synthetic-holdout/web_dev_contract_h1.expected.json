@@ -1,0 +1,14 @@
+{
+  "document_type": "contract",
+  "parties": ["Sunrise Dental Clinic", "Arjun Mehta"],
+  "effective_date": "2026-10-06",
+  "end_date": "2026-11-20",
+  "total_amount": 75000,
+  "payments": [
+    {"amount": 30000, "due_date": "2026-10-06"},
+    {"amount": 20000, "due_date": "2026-10-25"},
+    {"amount": 25000, "due_date": null}
+  ],
+  "notice_period_days": 10,
+  "renewal_automatic": null
+}

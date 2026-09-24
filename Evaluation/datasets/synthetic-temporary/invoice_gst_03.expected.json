@@ -1,0 +1,10 @@
+{
+  "document_type": "invoice",
+  "parties": ["Pixelcraft Media", "Greenleaf Organics Pvt. Ltd."],
+  "effective_date": "2026-09-05",
+  "total_amount": 73160,
+  "payments": [
+    {"amount": 73160, "due_date": "2026-09-20"}
+  ],
+  "identifiers": ["09AAKFP4321L1Z8", "09AABCG5678K1ZQ"]
+}

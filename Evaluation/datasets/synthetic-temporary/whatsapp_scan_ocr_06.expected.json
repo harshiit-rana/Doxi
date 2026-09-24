@@ -1,0 +1,14 @@
+{
+  "document_type": "service_agreement",
+  "parties": ["Sharma Exports Pvt Ltd", "Priya Nair"],
+  "effective_date": "2026-09-01",
+  "end_date": "2027-02-28",
+  "total_amount": 60000,
+  "payments": [
+    {"amount": 20000, "due_date": "2026-09-30"},
+    {"amount": 20000, "due_date": "2026-11-30"},
+    {"amount": 20000, "due_date": "2027-02-28"}
+  ],
+  "notice_period_days": 30,
+  "renewal_automatic": null
+}

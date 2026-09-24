@@ -175,18 +175,30 @@ public struct RelativeDateSpec: Codable, Hashable, Sendable {
     public var anchorText: String
     /// The base date used to derive the concrete date, when known.
     public var baseDate: CalendarDate?
+    /// True for contract terms ("a period of 11 months from 1 July"): the term ends on
+    /// the day before the anniversary.
+    public var isTermLength: Bool?
 
-    public init(offset: Duration, after: Bool, anchor: DateAnchor, anchorText: String, baseDate: CalendarDate? = nil) {
+    public init(offset: Duration, after: Bool, anchor: DateAnchor, anchorText: String, baseDate: CalendarDate? = nil, isTermLength: Bool? = nil) {
         self.offset = offset
         self.after = after
         self.anchor = anchor
         self.anchorText = anchorText
         self.baseDate = baseDate
+        self.isTermLength = isTermLength
     }
 
-    public var derivedDate: CalendarDate? { baseDate.map { offset.apply(to: $0, forward: after) } }
+    public var derivedDate: CalendarDate? {
+        baseDate.map { base in
+            let d = offset.apply(to: base, forward: after)
+            return isTermLength == true ? d.adding(days: -1) : d
+        }
+    }
 
-    public var phrase: String { "\(offset.formatted) \(after ? "after" : "before") \(anchorText)" }
+    public var phrase: String {
+        if isTermLength == true { return "end of a \(offset.formatted) term from \(anchorText)" }
+        return "\(offset.formatted) \(after ? "after" : "before") \(anchorText)"
+    }
 }
 
 /// A date that is either stated in the document or derived from a relative phrase.

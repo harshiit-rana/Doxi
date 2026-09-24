@@ -1,0 +1,10 @@
+{
+  "document_type": "invoice",
+  "parties": ["Meghna Kapoor Photography", "Lotus Events & Weddings"],
+  "effective_date": "2026-09-12",
+  "total_amount": 143500,
+  "payments": [
+    {"amount": 143500, "due_date": "2026-09-27"}
+  ],
+  "identifiers": ["AQWPK7788M"]
+}

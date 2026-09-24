@@ -60,7 +60,7 @@ final class DeterministicExtractorTests: XCTestCase {
         // 11-month term derived from the commencement date, base shown.
         guard case .date(let end)? = Fixtures.field(f, .endDate)?.value else { return XCTFail("no end date") }
         XCTAssertEqual(end.relative?.baseDate?.isoString, "2026-04-01")
-        XCTAssertEqual(end.resolved?.isoString, "2027-03-01")
+        XCTAssertEqual(end.resolved?.isoString, "2027-02-28")
     }
 
     func testInvoice() {

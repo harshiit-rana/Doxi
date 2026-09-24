@@ -1,0 +1,14 @@
+{
+  "document_type": "freelance_agreement",
+  "parties": ["ABC Technologies Private Limited", "Harshit Rana"],
+  "effective_date": "2026-09-15",
+  "end_date": "2026-12-15",
+  "total_amount": 80000,
+  "payments": [
+    {"amount": 40000, "due_date": "2026-10-15"},
+    {"amount": 40000, "due_date": "2026-11-15"}
+  ],
+  "notice_period_days": 30,
+  "renewal_automatic": false,
+  "identifiers": ["29AABCA1234F1Z5"]
+}

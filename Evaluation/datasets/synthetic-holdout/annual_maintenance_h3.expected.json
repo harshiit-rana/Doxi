@@ -1,0 +1,11 @@
+{
+  "document_type": "contract",
+  "parties": ["CoolAir Services", "Rana Digital Studio"],
+  "effective_date": "2026-09-01",
+  "end_date": "2027-08-31",
+  "payments": [
+    {"amount": 18000, "due_date": "2026-09-01", "recurrence": "yearly"}
+  ],
+  "notice_period_days": 30,
+  "renewal_automatic": true
+}

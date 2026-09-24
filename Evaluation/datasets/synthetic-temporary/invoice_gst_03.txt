@@ -1,0 +1,26 @@
+TAX INVOICE
+
+Pixelcraft Media
+23, Sector 18, Noida, Uttar Pradesh 201301
+GSTIN: 09AAKFP4321L1Z8
+
+Invoice No: PCM/26-27/0112
+Invoice Date: 05-09-2026
+
+Billed To:
+Greenleaf Organics Pvt. Ltd.
+GSTIN: 09AABCG5678K1ZQ
+
+Description                                   Qty      Rate        Amount
+Social media creatives (September)              20     2,500.00    50,000.00
+Reel editing                                     4     3,000.00    12,000.00
+
+Taxable Value                                                      62,000.00
+CGST @ 9%                                                           5,580.00
+SGST @ 9%                                                           5,580.00
+Total Amount                                                    Rs. 73,160.00
+
+Amount in words: Rupees Seventy Three Thousand One Hundred Sixty Only
+
+Payment Terms: Payable within 15 days from the date of invoice.
+Bank: HDFC Bank, A/c No. 50200012345678, IFSC HDFC0001234

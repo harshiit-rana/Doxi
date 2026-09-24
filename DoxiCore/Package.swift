@@ -11,11 +11,14 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "DoxiCore", targets: ["DoxiCore"]),
+        .library(name: "DoxiReader", targets: ["DoxiReader"]),
         .executable(name: "doxi-eval", targets: ["DoxiEval"]),
     ],
     targets: [
         .target(name: "DoxiCore"),
-        .executableTarget(name: "DoxiEval", dependencies: ["DoxiCore"]),
+        // PDFKit + Vision text reading (compiles to nothing where those are unavailable).
+        .target(name: "DoxiReader", dependencies: ["DoxiCore"]),
+        .executableTarget(name: "DoxiEval", dependencies: ["DoxiCore", "DoxiReader"]),
         .testTarget(name: "DoxiCoreTests", dependencies: ["DoxiCore"]),
     ]
 )

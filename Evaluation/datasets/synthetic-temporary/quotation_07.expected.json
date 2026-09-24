@@ -1,0 +1,11 @@
+{
+  "document_type": "quotation",
+  "effective_date": "2026-09-18",
+  "end_date": "2026-10-18",
+  "total_amount": 125000,
+  "payments": [
+    {"amount": 62500, "due_date": null},
+    {"amount": 62500, "due_date": null}
+  ],
+  "renewal_automatic": null
+}

@@ -33,6 +33,19 @@ public struct TextRange: Codable, Hashable, Sendable {
     }
 }
 
+/// A fragment of a line with its own box (OCR lines assembled from several
+/// observations, e.g. a table label and its amount).
+public struct TextLinePart: Codable, Hashable, Sendable {
+    /// Range of the fragment inside the line text.
+    public var range: TextRange
+    public var box: NormalizedRect
+
+    public init(range: TextRange, box: NormalizedRect) {
+        self.range = range
+        self.box = box
+    }
+}
+
 /// One line of text on a page together with its location.
 public struct TextLine: Codable, Hashable, Sendable {
     public var text: String
@@ -43,12 +56,29 @@ public struct TextLine: Codable, Hashable, Sendable {
     /// For PDF text: the range of this line inside `PDFPage.string`, so the viewer
     /// can build an exact `PDFSelection`. `nil` for OCR lines.
     public var sourceRange: TextRange?
+    /// Fragment boxes, when the line was assembled from several observations.
+    public var parts: [TextLinePart]?
 
-    public init(text: String, box: NormalizedRect, confidence: Double = 1, sourceRange: TextRange? = nil) {
+    public init(text: String, box: NormalizedRect, confidence: Double = 1, sourceRange: TextRange? = nil, parts: [TextLinePart]? = nil) {
         self.text = text
         self.box = box
         self.confidence = confidence
         self.sourceRange = sourceRange
+        self.parts = parts
+    }
+
+    /// Boxes covering a range of this line's text.
+    public func boxes(for local: TextRange) -> [NormalizedRect] {
+        let len = max(1, (text as NSString).length)
+        guard let parts, !parts.isEmpty else {
+            return [box.horizontalSlice(from: Double(local.location) / Double(len), to: Double(local.upperBound) / Double(len))]
+        }
+        return parts.compactMap { part in
+            guard let inter = part.range.intersection(local) else { return nil }
+            let plen = Double(max(1, part.range.length))
+            return part.box.horizontalSlice(from: Double(inter.location - part.range.location) / plen,
+                                            to: Double(inter.upperBound - part.range.location) / plen)
+        }
     }
 }
 
@@ -101,12 +131,7 @@ public struct PageText: Codable, Hashable, Sendable {
     /// Approximate boxes for a page-local range: one per covered line, sliced
     /// horizontally in proportion to the characters covered.
     public func boxes(for range: TextRange) -> [NormalizedRect] {
-        segments(for: range).map { seg in
-            let line = lines[seg.line]
-            let len = max(1, (line.text as NSString).length)
-            return line.box.horizontalSlice(from: Double(seg.local.location) / Double(len),
-                                            to: Double(seg.local.upperBound) / Double(len))
-        }
+        segments(for: range).flatMap { seg in lines[seg.line].boxes(for: seg.local) }
     }
 
     /// Lowest line confidence within a range.

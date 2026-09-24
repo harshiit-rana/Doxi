@@ -1,0 +1,8 @@
+{
+  "document_type": "business_letter",
+  "effective_date": "2026-10-02",
+  "payments": [
+    {"amount": 40000, "due_date": "2026-09-25"}
+  ],
+  "renewal_automatic": null
+}

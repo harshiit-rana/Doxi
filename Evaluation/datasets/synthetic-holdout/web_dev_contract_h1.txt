@@ -1,0 +1,20 @@
+WEBSITE DEVELOPMENT CONTRACT
+
+Date: 3rd October 2026
+
+Parties:
+Client: Sunrise Dental Clinic, Jaipur
+Developer: Arjun Mehta (Freelance Web Developer)
+
+Project: Clinic website with appointment booking.
+
+Timeline: Work will start on 06/10/2026 and the website will go live by 20/11/2026.
+
+Payment:
+- Advance of ₹30,000 payable on 06/10/2026
+- ₹20,000 on design approval, expected by 25/10/2026
+- Final ₹25,000 within 7 days of go-live
+
+Total project cost: ₹75,000 (excluding hosting).
+
+Cancellation: Either side can cancel with 10 days notice. Advance is non-refundable.
