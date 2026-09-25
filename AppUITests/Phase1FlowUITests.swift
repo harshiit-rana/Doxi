@@ -61,8 +61,11 @@ final class Phase1FlowUITests: XCTestCase {
         let fee = element(containing: "₹80,000")
         scrollTo(fee, "total amount should be shown")
         fee.tap()
-        waitFor(element(containing: "Exact text"), 10, "source sheet should show the exact source text")
-        app.buttons["Done"].tap()
+        waitFor(app.navigationBars["Total amount"], 10, "source sheet for the tapped field should open")
+        XCTAssertTrue(element(containing: "The total project fee shall be INR 80,000").exists, "sheet shows the source quote")
+        let how = ["Exact text", "Found in scanned text"].contains { element(containing: $0).exists }
+        XCTAssertTrue(how, "sheet says how the source was matched")
+        app.navigationBars["Total amount"].buttons["Done"].tap()
 
         // Review: accept high-confidence details and confirm.
         let review = app.buttons["reviewLink"]
@@ -109,5 +112,10 @@ final class Phase1FlowUITests: XCTestCase {
         field.buttons["Clear text"].tap()
         field.typeText("80,000")
         waitFor(element(containing: "ABC Technologies"), 15, "amount search finds the contract")
+
+        // The contract is a text PDF: its text must come from the PDF, not OCR.
+        element(containing: "ABC Technologies").tap()
+        let textSource = element(containing: "PDF text")
+        scrollTo(textSource, "a text PDF should be read from its embedded text")
     }
 }
