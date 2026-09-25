@@ -31,7 +31,10 @@ struct RootView: View {
         .overlay {
             if services.lock.isLocked { LockView() }
         }
-        .fullScreenCover(isPresented: .constant(!settings.hasCompletedOnboarding)) {
+        // A real binding (not `.constant`) so SwiftUI can record the dismissal; a constant
+        // binding can leave the presentation state stale and block later sheets.
+        .fullScreenCover(isPresented: Binding(get: { !settings.hasCompletedOnboarding },
+                                              set: { presented in if !presented { settings.hasCompletedOnboarding = true } })) {
             OnboardingView()
         }
         .sheet(item: Binding(get: { openedDocumentID.map(IdentifiedID.init) }, set: { openedDocumentID = $0?.id })) { item in
@@ -69,7 +72,8 @@ struct RootView: View {
         .alert("Couldn’t import", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(importError ?? "") }
-        .alert("Storage problem", isPresented: .constant(storageError != nil && !dismissedStorageError)) {
+        .alert("Storage problem", isPresented: Binding(get: { storageError != nil && !dismissedStorageError },
+                                                       set: { if !$0 { dismissedStorageError = true } })) {
             Button("OK") { dismissedStorageError = true }
         } message: { Text(storageError ?? "") }
     }

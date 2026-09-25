@@ -232,45 +232,52 @@ struct SourceItem: Identifiable, Hashable {
     let label: String
 }
 
-/// A read-only field row in the document detail screen.
+/// A read-only field row in the document detail screen. Rows with a source are
+/// navigation links to the original document at that place.
 struct DetailFieldRow: View {
     let field: ExtractedFieldRecord
     var isUser = false
     var onSource: (ExtractedFieldRecord) -> Void
 
     var body: some View {
-        Button {
-            onSource(field)
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(label).font(.subheadline).foregroundStyle(.secondary)
-                    Spacer()
-                    if field.verification.isAccepted {
-                        VerificationBadge(status: field.verification)
-                    } else {
-                        ConfidenceBadge(confidence: field.confidence)
-                    }
-                }
-                HStack {
-                    Text(value).foregroundStyle(.primary)
-                    if isUser { Text("You").font(.caption.weight(.semibold)).foregroundStyle(.tint) }
-                }
-                if let derived = field.value.derivedDateExplanation { DerivedDateNote(explanation: derived) }
-                if let source = field.source {
-                    SourceQuoteView(source: source)
-                    ForEach(Array(field.additionalSources.enumerated()), id: \.offset) { _, extra in
-                        SourceQuoteView(source: extra)
-                    }
+        if let source = field.source, let doc = field.document {
+            NavigationLink {
+                SourceView(document: doc, source: source, fieldLabel: field.kind.displayName)
+            } label: {
+                content
+            }
+            .accessibilityHint("Shows where this was found in the document")
+        } else {
+            content
+        }
+    }
+
+    var content: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                if field.verification.isAccepted {
+                    VerificationBadge(status: field.verification)
                 } else {
-                    Text(field.origin == .user ? "Added by you" : "No source found in the document")
-                        .font(.caption).foregroundStyle(field.origin == .user ? Color.secondary : Color.red)
+                    ConfidenceBadge(confidence: field.confidence)
                 }
             }
+            HStack {
+                Text(value).foregroundStyle(.primary)
+                if isUser { Text("You").font(.caption.weight(.semibold)).foregroundStyle(.tint) }
+            }
+            if let derived = field.value.derivedDateExplanation { DerivedDateNote(explanation: derived) }
+            if let source = field.source {
+                SourceQuoteView(source: source)
+                ForEach(Array(field.additionalSources.enumerated()), id: \.offset) { _, extra in
+                    SourceQuoteView(source: extra)
+                }
+            } else {
+                Text(field.origin == .user ? "Added by you" : "No source found in the document")
+                    .font(.caption).foregroundStyle(field.origin == .user ? Color.secondary : Color.red)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(field.source == nil)
-        .accessibilityHint(field.source == nil ? "" : "Shows the source in the document")
     }
 
     var label: String {

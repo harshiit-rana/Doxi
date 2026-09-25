@@ -83,6 +83,17 @@ final class Phase1FlowUITests: XCTestCase {
         for _ in 0..<8 where !(review.exists && review.isHittable) { app.swipeDown() }
         review.tap()
         waitFor(element(containing: "Who are you"), 10, "identity question shown")
+        // Soft check: a quote inside a review row opens the source (buttons in list rows).
+        continueAfterFailure = true
+        let quote = element(containing: "The first installment")
+        if quote.waitForExistence(timeout: 5) {
+            quote.tap()
+            let opened = app.navigationBars["Payment"].waitForExistence(timeout: 5)
+            XCTAssertTrue(opened, "tapping a quote in Review should open its source")
+            if opened { app.navigationBars["Payment"].buttons.firstMatch.tap() }
+        }
+        continueAfterFailure = false
+
         let accept = app.buttons["acceptHighConfidence"]
         waitFor(accept, 10, "high-confidence details can be accepted together")
         accept.tap()
