@@ -30,11 +30,19 @@ jobs:
         run: swift build && swift test
       - name: Generate Xcode project
         run: brew install xcodegen && xcodegen generate
-      - name: Build and test app
+      - name: Build and test app (unit + end-to-end UI tests in the simulator)
         run: |
           set -o pipefail
           SIM=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]+' | sed 's/ *$//')
           echo "Simulator: $SIM"
           xcodebuild -project Doxi.xcodeproj -scheme Doxi \
             -destination "platform=iOS Simulator,name=$SIM" \
-            CODE_SIGNING_ALLOWED=NO test | tail -200
+            CODE_SIGNING_ALLOWED=NO test > xcodebuild.log 2>&1 || STATUS=$?
+          echo "::group::Build warnings in Doxi sources"
+          grep -E "^/.*/(App|ShareExtension|DoxiCore)/.*warning:" xcodebuild.log | sort -u | head -100 || true
+          echo "::endgroup::"
+          echo "::group::Test summary"
+          grep -E "Test Case '.*' (passed|failed)|error:|Executed [0-9]+ test" xcodebuild.log | grep -v "Capturing\|Checking" || true
+          echo "::endgroup::"
+          tail -60 xcodebuild.log
+          exit ${STATUS:-0}

@@ -22,11 +22,22 @@ final class Phase1FlowUITests: XCTestCase {
         XCTAssertTrue(e.waitForExistence(timeout: timeout), message + "\n" + app.debugDescription.prefix(4000))
     }
 
-    /// Lists render rows lazily; scroll until the element exists and is hittable.
-    func scrollTo(_ e: XCUIElement, _ message: String, maxSwipes: Int = 8) {
+    /// Lists render rows lazily; scroll until the element exists and sits in the middle
+    /// of the screen (not under the navigation or tab bar).
+    func scrollTo(_ e: XCUIElement, _ message: String, maxSwipes: Int = 10) {
+        let height = app.windows.firstMatch.frame.height
+        func wellPlaced() -> Bool {
+            guard e.exists, e.isHittable else { return false }
+            let f = e.frame
+            return f.minY > height * 0.15 && f.maxY < height * 0.75
+        }
         var swipes = 0
-        while !(e.exists && e.isHittable) && swipes < maxSwipes {
-            app.swipeUp()
+        while !wellPlaced() && swipes < maxSwipes {
+            if e.exists && e.frame.minY < height * 0.15 {
+                app.swipeDown(velocity: .slow)
+            } else {
+                app.swipeUp(velocity: .slow)
+            }
             swipes += 1
         }
         XCTAssertTrue(e.exists, message + "\n" + app.debugDescription.prefix(4000))
