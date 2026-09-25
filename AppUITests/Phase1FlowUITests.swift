@@ -125,7 +125,7 @@ final class Phase1FlowUITests: XCTestCase {
         waitFor(field, 10, "search field")
         field.tap()
         field.typeText("Greenleaf")
-        let hit = element(containing: "Invoice")
+        let hit = app.collectionViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Invoice")).firstMatch
         waitFor(hit, 15, "OCR text of the scanned invoice should be searchable")
         hit.tap()
         waitFor(app.navigationBars.element(boundBy: 0), 10, "search result opens a document")
@@ -138,10 +138,13 @@ final class Phase1FlowUITests: XCTestCase {
         field.tap()
         field.buttons["Clear text"].tap()
         field.typeText("80,000")
-        waitFor(element(containing: "ABC Technologies"), 15, "amount search finds the contract")
+        // Results only (the search field's placeholder also mentions "ABC Technologies").
+        let contractHit = app.collectionViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "ABC Technologies")).firstMatch
+        waitFor(contractHit, 15, "amount search finds the contract")
+        XCTAssertTrue(contractHit.label.contains("80,000"), "the result shows the matching amount: \(contractHit.label)")
 
         // The contract is a text PDF: its text must come from the PDF, not OCR.
-        element(containing: "ABC Technologies").tap()
+        contractHit.tap()
         let textSource = element(containing: "PDF text")
         scrollTo(textSource, "a text PDF should be read from its embedded text")
     }
