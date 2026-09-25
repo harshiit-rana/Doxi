@@ -193,6 +193,7 @@ struct ReviewView: View {
                     Text("Accept \(pendingHigh.count) high-confidence detail\(pendingHigh.count == 1 ? "" : "s")").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("acceptHighConfidence")
             }
             Button {
                 if pending.isEmpty && !needsIdentity { finish() } else { finishPrompt = true }
@@ -201,6 +202,7 @@ struct ReviewView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(services.processor.inFlight.contains(document.id))
+            .accessibilityIdentifier("confirmAndTrack")
         }
         .padding()
         .background(.bar)
@@ -249,6 +251,7 @@ struct FieldReviewRow: View {
                 }
             }
             Text(valueText).font(.body.weight(.medium))
+            if let derived = field.value.derivedDateExplanation { DerivedDateNote(explanation: derived) }
             if field.conflictGroup != nil && field.verification == .pending {
                 Label("Different values were found. Confirm the correct one.", systemImage: "arrow.left.arrow.right")
                     .font(.caption).foregroundStyle(.orange)
@@ -292,7 +295,7 @@ struct FieldReviewRow: View {
         case .payment(let p): return p.label
         case .clause(let c): return c.category.displayName
         case .party(let p): return p.role.map { "Party · \($0)" } ?? "Party"
-        default: return field.kind.displayName
+        default: return field.kind.label(for: document.documentType)
         }
     }
 

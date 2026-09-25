@@ -214,9 +214,14 @@ public struct DateValue: Codable, Hashable, Sendable {
         self.ambiguousFormat = ambiguousFormat
     }
 
+    /// A date derived from a relative phrase. `date` stays nil: the document does not
+    /// state a calendar date, and `resolved` computes it from the base date.
     public static func relative(_ spec: RelativeDateSpec) -> DateValue {
-        DateValue(date: spec.derivedDate, relative: spec)
+        DateValue(date: nil, relative: spec)
     }
+
+    /// True when the date was computed rather than written in the document.
+    public var isDerived: Bool { date == nil && relative != nil }
 
     /// The concrete date: stated, or derived from the base date.
     public var resolved: CalendarDate? { date ?? relative?.derivedDate }

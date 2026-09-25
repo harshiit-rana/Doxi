@@ -1,4 +1,5 @@
 import DoxiCore
+import DoxiReader
 import PDFKit
 import SwiftUI
 
@@ -36,26 +37,7 @@ struct PDFKitView: UIViewRepresentable {
             annotations.removeAll()
             guard let span, let document = view.document, let page = document.page(at: span.pageIndex) else { return }
 
-            var rects: [CGRect] = []
-            if span.textSource == .pdfText, let lines {
-                // Exact glyph bounds from the PDF's own text layer.
-                let pageText = PageText(index: span.pageIndex, source: .pdfText, lines: lines)
-                for seg in pageText.segments(for: span.range) {
-                    guard let base = lines[seg.line].sourceRange else { continue }
-                    let range = NSRange(location: base.location + seg.local.location, length: seg.local.length)
-                    if let selection = page.selection(for: range) {
-                        rects += selection.selectionsByLine().map { $0.bounds(for: page) }.filter { $0.width > 0 && $0.height > 0 }
-                    }
-                }
-            }
-            if rects.isEmpty {
-                // OCR boxes (normalized, bottom-left origin, relative to the crop box).
-                let crop = page.bounds(for: .cropBox)
-                rects = span.boxes.map { b in
-                    CGRect(x: crop.minX + b.x * crop.width, y: crop.minY + b.y * crop.height,
-                           width: b.width * crop.width, height: b.height * crop.height)
-                }
-            }
+            let rects = HighlightGeometry.rects(for: span, on: page, lines: lines)
             for rect in rects {
                 let r = rect.insetBy(dx: -2, dy: -1)
                 let annotation = PDFAnnotation(bounds: r, forType: .highlight, withProperties: nil)

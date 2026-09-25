@@ -21,6 +21,37 @@ final class PartyMatcherTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(PartyMatcher.similarity("Harshlt Rana", "Harshit Rana"), PartyMatcher.matchThreshold)
     }
 
+    // Scenarios from the Phase 1 validation plan.
+    let planProfile = IdentityProfile(name: "Harshit Rana", businessName: "Rana Digital", aliases: ["Harshit"])
+
+    func testPlanClearMatch() {
+        XCTAssertEqual(PartyMatcher.match(parties: ["ABC Technologies", "Harshit Rana"], profile: planProfile),
+                       .matched(index: 1, score: 1, matchedName: "Harshit Rana"))
+    }
+
+    func testPlanBusinessAliasMatch() {
+        guard case .matched(let i, _, let name) = PartyMatcher.match(parties: ["Rana Digital", "ABC Technologies"], profile: planProfile) else {
+            return XCTFail("expected a match")
+        }
+        XCTAssertEqual(i, 0)
+        XCTAssertEqual(name, "Rana Digital")
+        if case .matched = PartyMatcher.match(parties: ["M/s Rana Digital Studio", "ABC Technologies"], profile: planProfile) {} else { XCTFail() }
+    }
+
+    func testPlanSurnameOnlyIsAmbiguous() {
+        XCTAssertEqual(PartyMatcher.match(parties: ["Rana", "ABC Technologies"], profile: planProfile), .ambiguous(candidates: [0]))
+    }
+
+    func testFirstNameShareIsNotAMatch() {
+        // Another Harshit is not the user.
+        let outcome = PartyMatcher.match(parties: ["Harshit Mehta", "ABC Technologies"], profile: planProfile)
+        XCTAssertEqual(outcome, .ambiguous(candidates: [0]))
+    }
+
+    func testPlanNoMatch() {
+        XCTAssertEqual(PartyMatcher.match(parties: ["ABC Technologies", "XYZ Agency"], profile: planProfile), .noMatch)
+    }
+
     func testNoMatchAsksUser() {
         XCTAssertEqual(PartyMatcher.match(parties: ["ABC Technologies", "XYZ Agency"], profile: profile), .noMatch)
     }

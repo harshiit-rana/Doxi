@@ -11,6 +11,7 @@ public final class SourceMatcher: @unchecked Sendable {
     let tokens: [(token: String, range: NSRange)]
     /// Whether numeric dates in this document are MM/DD (same evidence rule as the extractor).
     public let preferMonthFirst: Bool
+    lazy var sentenceRanges: [NSRange] = SentenceSplitter.ranges(in: text)
 
     public init(document: DocumentText) {
         self.document = document
@@ -31,24 +32,69 @@ public final class SourceMatcher: @unchecked Sendable {
     public struct Match: Equatable {
         public var range: NSRange
         public var quality: MatchQuality
+        /// How many places in the document matched equally well. More than one means
+        /// the chosen occurrence could not be told apart from others.
+        public var equallyGoodOccurrences: Int = 1
     }
 
-    /// Finds a quote in the document, preferring occurrences on `page` (0-based).
-    public func locate(quote: String, page: Int? = nil) -> Match? {
+    /// Finds a quote in the document. When the quote occurs more than once, the
+    /// occurrence is chosen by (1) whether it contains `value`, (2) whether it is on
+    /// `page` (0-based), (3) how well its surroundings fit `kind`, then (4) position.
+    public func locate(quote: String, page: Int? = nil, value: FieldValue? = nil, kind: FieldKind? = nil) -> Match? {
         let trimmed = quote.trimmed().trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”…."))
         guard trimmed.count >= 3 else { return nil }
 
         // 1. Verbatim.
-        if let r = best(of: allRanges(of: trimmed, in: ns), page: page) {
-            return Match(range: r, quality: .exact)
-        }
+        let exact = allRanges(of: trimmed, in: ns)
+        if !exact.isEmpty { return choose(exact, quality: .exact, page: page, value: value, kind: kind) }
         // 2. Normalised (case, whitespace, quotes, dashes).
         let nq = TextNormalizer.normalize(trimmed)
-        if nq.count >= 3, let r = best(of: allRanges(of: nq, in: normalizedNS).map { normalized.originalRange(of: $0) }, page: page) {
-            return Match(range: r, quality: .normalized)
+        if nq.count >= 3 {
+            let normalizedHits = allRanges(of: nq, in: normalizedNS).map { normalized.originalRange(of: $0) }
+            if !normalizedHits.isEmpty { return choose(normalizedHits, quality: .normalized, page: page, value: value, kind: kind) }
         }
-        // 3. Token window (OCR noise, dropped punctuation, small paraphrase).
-        return fuzzy(quote: trimmed, page: page)
+        // 3. Token windows (OCR noise, dropped punctuation, small paraphrase).
+        let windows = fuzzyWindows(quote: trimmed)
+        guard let bestScore = windows.map(\.score).max() else { return nil }
+        // Near-best windows compete on the same criteria as exact hits.
+        let contenders = windows.filter { $0.score >= bestScore - 0.05 }.map(\.range)
+        return choose(contenders, quality: .fuzzy, page: page, value: value, kind: kind)
+    }
+
+    func choose(_ ranges: [NSRange], quality: MatchQuality, page: Int?, value: FieldValue?, kind: FieldKind?) -> Match? {
+        guard !ranges.isEmpty else { return nil }
+        let pageRange = page.flatMap { document.fullTextRange(ofPage: $0) }
+        typealias Scored = (range: NSRange, key: [Int])
+        let scored: [Scored] = ranges.map { r in
+            let verified = value.map { verify($0, in: r) == .verified } ?? false
+            let onPage = pageRange.map { NSLocationInRange(r.location, $0.nsRange) } ?? false
+            let context = kind.map { contextScore($0, around: r) } ?? 0
+            return (r, [verified ? 1 : 0, onPage ? 1 : 0, context])
+        }
+        let best = scored.max { a, b in a.key.lexicographicallyPrecedes(b.key) || (a.key == b.key && a.range.location > b.range.location) }!
+        let ties = scored.filter { $0.key == best.key }.count
+        return Match(range: best.range, quality: quality, equallyGoodOccurrences: ties)
+    }
+
+    static let contextPatterns: [FieldKind: Pattern] = [
+        .totalAmount: Pattern(#"total|grand|contract\s+value|project\s+(?:fee|value|cost)|consideration|amount\s+(?:due|payable)"#),
+        .payment: Pattern(#"\bpa(?:y|id|yable|yment)|instal+ment|advance|\bdue\b|balance|\brent\b|milestone|deposit"#),
+        .effectiveDate: Pattern(#"effective|commenc|start|\bdated\b|made\s+on|entered\s+into|invoice\s+date|^\s*date"#),
+        .endDate: Pattern(#"\bend|expir|until|\btill\b|terminat|valid|\bto\b"#),
+        .noticePeriod: Pattern(#"notice"#),
+        .renewal: Pattern(#"renew|extend"#),
+    ]
+    static let misleadingContext = Pattern(#"penalt|late\s+fee|interest|for\s+example|e\.g\.|already\s+paid|has\s+paid|received"#)
+
+    /// How well the text around a range fits a field kind (higher is better).
+    func contextScore(_ kind: FieldKind, around r: NSRange) -> Int {
+        // The sentence (or line) containing the match is the context; neighbouring
+        // sentences often talk about other amounts.
+        let window = sentenceRanges.first { NSLocationInRange(r.location, $0) } ?? expanded(r, by: 60)
+        var score = 0
+        if let p = SourceMatcher.contextPatterns[kind], p.firstMatch(in: text, range: window) != nil { score += 2 }
+        if kind == .totalAmount || kind == .payment, SourceMatcher.misleadingContext.firstMatch(in: text, range: window) != nil { score -= 2 }
+        return score
     }
 
     func allRanges(of needle: String, in haystack: NSString) -> [NSRange] {
@@ -65,20 +111,15 @@ public final class SourceMatcher: @unchecked Sendable {
         return out
     }
 
-    func best(of ranges: [NSRange], page: Int?) -> NSRange? {
-        guard let page, let pageRange = document.fullTextRange(ofPage: page) else { return ranges.first }
-        return ranges.first { NSLocationInRange($0.location, pageRange.nsRange) } ?? ranges.first
-    }
-
-    func fuzzy(quote: String, page: Int?) -> Match? {
+    /// Candidate token windows scoring at least 0.75 (share of quote tokens found in order-free window).
+    func fuzzyWindows(quote: String) -> [(score: Double, range: NSRange)] {
         var q = TextNormalizer.tokens(quote)
-        guard q.count >= 3 else { return nil }
+        guard q.count >= 3 else { return [] }
         if q.count > 40 { q = Array(q.prefix(40)) }
         let n = q.count
         let anchors = Set(q.prefix(4))
-        var best: (score: Double, start: Int, end: Int)?
-        let pageRange = page.flatMap { document.fullTextRange(ofPage: $0) }
-
+        var out: [(Double, NSRange)] = []
+        var lastEnd = -1
         for i in tokens.indices where anchors.contains(tokens[i].token) || tokenClose(tokens[i].token, q[0]) {
             let windowEnd = min(tokens.count, i + n + 3)
             var used = [Bool](repeating: false, count: n)
@@ -92,20 +133,57 @@ public final class SourceMatcher: @unchecked Sendable {
                     lastHit = j
                 }
             }
-            var score = Double(hits) / Double(n)
-            if let pr = pageRange, NSLocationInRange(tokens[i].range.location, pr.nsRange) { score += 0.01 }
-            if best == nil || score > best!.score { best = (score, i, lastHit) }
+            let score = Double(hits) / Double(n)
+            guard score >= 0.75 else { continue }
+            // If the window began on a later quote word (earlier ones were misread), step back
+            // over as many preceding tokens on the same line.
+            var first = i
+            if let lead = used.firstIndex(of: true), lead > 0 {
+                var k = lead
+                while k > 0, first > 0 {
+                    let gap = NSRange(location: tokens[first - 1].range.location,
+                                      length: tokens[first].range.location - tokens[first - 1].range.location)
+                    if ns.substring(with: gap).contains("\n") { break }
+                    first -= 1
+                    k -= 1
+                }
+            }
+            let start = tokens[first].range.location
+            let endRange = tokens[lastHit].range
+            let range = NSRange(location: start, length: endRange.location + endRange.length - start)
+            // Overlapping windows describe the same place; keep the better one.
+            if start < lastEnd, let last = out.last {
+                if score > last.0 { out[out.count - 1] = (score, range); lastEnd = range.location + range.length }
+                continue
+            }
+            out.append((score, range))
+            lastEnd = range.location + range.length
         }
-        guard let b = best, b.score >= 0.75 else { return nil }
-        let start = tokens[b.start].range.location
-        let endRange = tokens[b.end].range
-        return Match(range: NSRange(location: start, length: endRange.location + endRange.length - start), quality: .fuzzy)
+        return out
     }
 
     func tokenClose(_ a: String, _ b: String) -> Bool {
-        guard a.count >= 5, b.count >= 5, abs(a.count - b.count) <= 1 else { return false }
-        return PartyMatcher.levenshtein(a, b) <= 1
+        if a == b { return true }
+        let fa = SourceMatcher.ocrFold(a), fb = SourceMatcher.ocrFold(b)
+        if fa == fb && fa.count >= 2 { return true }
+        guard fa.count >= 5, fb.count >= 5, abs(fa.count - fb.count) <= 1 else { return false }
+        return PartyMatcher.levenshtein(fa, fb) <= 1
     }
+
+    /// Folds characters OCR commonly confuses ("rn"/"m", "l"/"1"/"i", "0"/"o", "5"/"s").
+    static func ocrFold(_ s: String) -> String {
+        var t = s.replacingOccurrences(of: "rn", with: "m").replacingOccurrences(of: "vv", with: "w")
+        t = String(t.map { ch -> Character in
+            switch ch {
+            case "1", "i", "|", "!": return "l"
+            case "0": return "o"
+            case "5": return "s"
+            default: return ch
+            }
+        })
+        return t
+    }
+
 
     // MARK: Value verification
 
@@ -180,34 +258,38 @@ public final class SourceMatcher: @unchecked Sendable {
     // MARK: Locating values without a quote
 
     /// Finds the value itself in the text (used when a quote cannot be matched).
-    public func locateValue(_ value: FieldValue, page: Int?) -> NSRange? {
+    /// Among several occurrences, the one whose surroundings fit `kind` wins.
+    public func locateValue(_ value: FieldValue, page: Int?, kind: FieldKind? = nil) -> Match? {
+        var candidates: [NSRange] = []
         switch value {
         case .money(let m):
-            return AmountParser.mentions(in: text).first { $0.money.minorUnits == m.minorUnits }?.range
+            candidates = AmountParser.mentions(in: text).filter { $0.money.minorUnits == m.minorUnits }.map(\.range)
         case .date(let d):
             guard let date = d.date else { return nil }
-            return DateParser.mentions(in: text, preferMonthFirst: preferMonthFirst).first { $0.date == date }?.range
+            candidates = DateParser.mentions(in: text, preferMonthFirst: preferMonthFirst).filter { $0.date == date }.map(\.range)
         case .duration(let du):
-            return DurationParser.mentions(in: text).first { $0.duration.approximateDays == du.approximateDays }?.range
+            candidates = DurationParser.mentions(in: text).filter { $0.duration.approximateDays == du.approximateDays }.map(\.range)
         case .party(let p):
-            let r = ns.range(of: p.name, options: [.caseInsensitive, .diacriticInsensitive])
-            if r.location != NSNotFound { return r }
-            let nr = normalizedNS.range(of: TextNormalizer.normalize(p.name))
-            return nr.location != NSNotFound ? normalized.originalRange(of: nr) : nil
+            candidates = allRanges(of: p.name, in: ns)
+            if candidates.isEmpty {
+                candidates = allRanges(of: TextNormalizer.normalize(p.name), in: normalizedNS).map { normalized.originalRange(of: $0) }
+            }
         case .payment(let p):
             guard let a = p.amount else { return nil }
-            let candidates = AmountParser.mentions(in: text).filter { $0.money.minorUnits == a.minorUnits }
+            let amounts = AmountParser.mentions(in: text).filter { $0.money.minorUnits == a.minorUnits }
             if let date = p.due?.date {
                 let dates = DateParser.mentions(in: text, preferMonthFirst: preferMonthFirst).filter { $0.date == date }
-                if let pair = candidates.first(where: { c in dates.contains { abs($0.range.location - c.range.location) < 200 } }) { return pair.range }
+                let paired = amounts.filter { c in dates.contains { abs($0.range.location - c.range.location) < 200 } }
+                candidates = (paired.isEmpty ? amounts : paired).map(\.range)
+            } else {
+                candidates = amounts.map(\.range)
             }
-            return candidates.first?.range
         case .identifier(let i):
-            let r = ns.range(of: i.value)
-            return r.location == NSNotFound ? nil : r
+            candidates = allRanges(of: i.value, in: ns)
         default:
             return nil
         }
+        return choose(candidates, quality: .valueOnly, page: page, value: nil, kind: kind)
     }
 
     /// The sentence around a range, for readable quotes.

@@ -134,6 +134,7 @@ struct SettingsView: View {
             Button("Allow notifications") { Task { await services.notifications.requestAuthorizationIfNeeded(); services.rescheduleReminders(context: context) } }
         default:
             LabeledContent("Scheduled reminders", value: "\(services.notifications.scheduledCount)")
+                .accessibilityIdentifier("scheduledReminders")
         }
     }
 }

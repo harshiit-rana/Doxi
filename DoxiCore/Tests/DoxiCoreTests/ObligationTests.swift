@@ -89,3 +89,49 @@ final class ObligationTests: XCTestCase {
         XCTAssertEqual(t.unassignedCount, 1)
     }
 }
+
+final class ConfirmationRulesTests: XCTestCase {
+    func testEditedValueDrivesObligationButSourceKeepsDocumentText() async {
+        var fields = await ExtractionPipeline().run(Fixtures.doc(Fixtures.freelanceContract)).fields
+        guard let i = fields.firstIndex(where: { $0.kind == .payment }), case .payment(var p) = fields[i].value else { return XCTFail() }
+        p.amount = Money(minorUnits: 4_500_000)
+        fields[i].value = .payment(p)
+        fields[i].verification = .edited
+        let obligations = ObligationBuilder.build(from: fields, context: .init(parties: [], userParty: nil, userIsNeither: false))
+        XCTAssertEqual(obligations.count, 1, "only the accepted field becomes an obligation")
+        XCTAssertEqual(obligations[0].amount, Money(minorUnits: 4_500_000))
+        XCTAssertTrue(obligations[0].source?.quote.contains("40,000") ?? false, "source must still show the document's text")
+    }
+
+    func testUnverifiedAndRejectedFieldsNeverBecomeObligations() {
+        let payment = FieldValue.payment(PaymentValue(amount: Money(minorUnits: 100), due: DateValue(date: CalendarDate(iso: "2027-01-01")), label: "x"))
+        let fields = [
+            ExtractedFieldDraft(kind: .payment, value: payment, origin: .llm, source: nil, confidence: .unverified, verification: .pending),
+            ExtractedFieldDraft(kind: .payment, value: payment, origin: .deterministic, source: nil, confidence: .high, verification: .rejected),
+        ]
+        XCTAssertTrue(ObligationBuilder.build(from: fields, context: .init(parties: [], userParty: nil, userIsNeither: false)).isEmpty)
+    }
+
+    func testDerivedDueDateKeepsItsExplanation() {
+        let spec = RelativeDateSpec(offset: Duration(value: 30, unit: .days), after: true, anchor: .invoiceDate, anchorText: "invoice",
+                                    baseDate: CalendarDate(iso: "2026-09-15"))
+        let field = ExtractedFieldDraft(kind: .payment, value: .payment(PaymentValue(amount: Money(minorUnits: 100), due: .relative(spec), label: "Invoice payment")),
+                                        origin: .deterministic, source: nil, verification: .confirmed)
+        let ob = ObligationBuilder.build(from: [field], context: .init(parties: [], userParty: nil, userIsNeither: false)).first
+        XCTAssertEqual(ob?.dueDate?.isoString, "2026-10-15")
+        XCTAssertEqual(ob?.dueDateExplanation, "30 days after invoice (base 15/09/2026)")
+    }
+
+    func testCompletedAndCancelledObligationsGetNoReminders() {
+        let planner = ReminderPlanner()
+        let now = CalendarDate(iso: "2026-09-01")!.date(hour: 8)
+        func c(_ open: Bool) -> ReminderCandidate {
+            ReminderCandidate(obligationID: UUID(), title: "t", body: "", dueDate: CalendarDate(iso: "2026-10-15")!, recurrence: nil, offsets: [30, 14, 7, 0], isOpen: open)
+        }
+        XCTAssertEqual(planner.plan([c(true)], now: now).count, 4)
+        for status in [ObligationStatus.completed, .received, .cancelled, .dismissed] {
+            XCTAssertFalse(status.isOpen)
+            XCTAssertTrue(planner.plan([c(status.isOpen)], now: now).isEmpty)
+        }
+    }
+}

@@ -156,13 +156,17 @@ public enum LLMPrompt {
     - For every item, source_quote must be copied verbatim from the document text (8 to 40 words) and must contain the value. \
     Do not paraphrase, correct spelling, or join text from different places in source_quote.
     - page is the page number shown in the <page number="N"> tag that contains the quote.
+    - Keep date roles distinct: effective_date is when the agreement or document takes effect (for invoices and letters, the \
+    document's own date); end_date is when it expires or ends. Signing dates, dates of other referenced documents and example \
+    dates are not effective, end or due dates.
     - Dates: the document uses the Indian DD/MM/YYYY convention unless it clearly states otherwise. Put a calendar date in \
     due_date / value as YYYY-MM-DD only when the document states that specific date. If a date is relative \
     (for example "within 30 days of signing"), set due_date to null and copy the phrase into due_date_text.
     - Amounts: give the number only (for example "80000" or "150000.50"); lakh and crore must be converted to the full number. \
     Currency as an ISO code such as INR.
     - payments: every individual payment, instalment, advance, recurring fee or rent, with its own amount and due date. \
-    Do not list the total contract value as a payment unless it is payable in one go. payer and payee are the party names \
+    Do not list the total contract value as a payment unless it is payable in one go. Do not list amounts that were already \
+    paid or received, penalties, late fees, interest, or amounts used as examples. payer and payee are the party names \
     as written in the document, or null if the document does not say.
     - obligations: non-payment duties with a date or deadline (deliverables, submissions, returns). Payments go in payments.
     - clauses: categories payment, renewal, termination, notice, confidentiality, deliverables, penalties, deadlines. \

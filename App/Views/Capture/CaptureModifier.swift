@@ -71,7 +71,8 @@ struct CaptureCoordinator: ViewModifier {
                     }
                     if !failures.isEmpty { errorMessage = failures.joined(separator: "\n") }
                 case .failure(let error):
-                    errorMessage = error.localizedDescription
+                    // Closing the picker is not an error.
+                    if (error as? CocoaError)?.code != .userCancelled { errorMessage = error.localizedDescription }
                 }
             }
             .alert("Something went wrong", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {

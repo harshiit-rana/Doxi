@@ -18,6 +18,8 @@ final class DocumentProcessor {
     private(set) var inFlight: Set<UUID> = []
     /// Documents whose text is currently with a cloud provider.
     private(set) var cloudInFlight: Set<UUID> = []
+    /// Page reading progress (page being read, total pages) for documents being read.
+    private(set) var readingProgress: [UUID: (page: Int, total: Int)] = [:]
 
     init(fileStore: FileStore, settings: AppSettings) {
         self.fileStore = fileStore
@@ -43,6 +45,14 @@ final class DocumentProcessor {
         try? context.save()
 
         let url = fileStore.url(for: doc.storedFilename)
+        let docID = doc.id
+        let report: @Sendable (Int, Int) -> Void = { page, total in
+            Task { @MainActor [weak self] in
+                guard let self, self.inFlight.contains(docID) else { return }
+                self.readingProgress[docID] = (page + 1, total)
+            }
+        }
+        defer { readingProgress[docID] = nil }
         let read = await Task.detached(priority: .userInitiated) { () -> ReadOutput in
             guard let pdf = PDFDocument(url: url) else {
                 return ReadOutput(pages: [], warnings: [], rotatedPDF: nil, failure: "The file could not be opened as a PDF.")
@@ -53,7 +63,7 @@ final class DocumentProcessor {
             guard pdf.pageCount > 0 else {
                 return ReadOutput(pages: [], warnings: [], rotatedPDF: nil, failure: "The PDF has no pages.")
             }
-            let results = DocumentReader().read(pdf)
+            let results = DocumentReader().read(pdf, progress: report)
             var rotated = false
             for (i, r) in results.enumerated() {
                 if let rotation = r.suggestedRotation, let page = pdf.page(at: i) {
@@ -65,6 +75,7 @@ final class DocumentProcessor {
                               rotatedPDF: rotated ? pdf.dataRepresentation() : nil, failure: nil)
         }.value
 
+        readingProgress[docID] = nil
         if let failure = read.failure {
             doc.status = .failed
             doc.processingMessage = failure
@@ -147,7 +158,9 @@ final class DocumentProcessor {
         }
         matchIdentity(doc, profile: profile)
         updateTitle(doc)
-        doc.status = .needsReview
+        // A document the user already confirmed stays tracked (its obligations and
+        // reminders keep working); new unchecked details show up as "to check".
+        doc.status = doc.confirmedAt != nil ? .confirmed : .needsReview
         try? context.save()
     }
 

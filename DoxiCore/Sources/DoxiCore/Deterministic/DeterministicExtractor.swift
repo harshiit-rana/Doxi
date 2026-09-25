@@ -385,7 +385,9 @@ private struct Context {
                 // Use the line for tabular documents, otherwise the sentence.
                 line.length < 90 ? line : sentence(containing: mention.range.location)
             }) else { continue }
-            if Context.penaltyContext.firstMatch(in: text, range: container) != nil { continue }
+            if Context.penaltyContext.firstMatch(in: text, range: container) != nil
+                || Context.exampleContext.firstMatch(in: text, range: container) != nil
+                || Context.pastPayment.firstMatch(in: text, range: container) != nil { continue }
             if Context.subtotal.firstMatch(in: text, range: container) != nil && Context.totalStrong.matches(in: text, range: container).allSatisfy({ sub($0.range).lowercased().contains("sub") }) { continue }
             var score = 0
             if let k = Context.totalStrong.matches(in: text, range: container).first(where: { !sub($0.range).lowercased().contains("sub") }), k.range.location <= mention.range.location + mention.range.length {
@@ -413,8 +415,13 @@ private struct Context {
             strength: b.score >= 3 ? .strong : .weak)
     }
 
+    /// Payments that already happened are history, not obligations.
+    static let pastPayment = Pattern(#"\b(?:has|have|had|was|were)\s+(?:already\s+)?(?:been\s+)?(?:paid|received|deposited|remitted)|already\s+(?:been\s+)?paid|received\s+(?:with\s+thanks|a\s+sum|an\s+amount|the\s+sum|payment)|receipt\s+of\s+(?:rs|inr|₹)|paid\s+in\s+full"#)
+    /// Illustrations inside clauses ("for example, an invoice of ₹80,000").
+    static let exampleContext = Pattern(#"\bfor\s+(?:example|instance)\b|\be\.\s?g\.|\bby\s+way\s+of\s+(?:example|illustration)|\billustrat"#)
+
     static let paymentContext = Pattern(#"\bpa(?:y|id|yable|yment)|instal+ment|advance|milestone|\bdue\b|balance|remaining|tranche|\brent\b|deposit|retainer|on\s+signing|upon\s+(?:signing|completion|delivery)"#)
-    static let dueLabel = Pattern(#"(?:payment\s+)?due\s+(?:date|on|by)|pay(?:able)?\s+(?:by|on\s+or\s+before|before)|due\s*[:\-–]"#)
+    static let dueLabel = Pattern(#"(?:payment\s+)?due\s+(?:date|on|by)|pa(?:y|yable|id)\s+(?:by|on\s+or\s+before|before)|(?:release|clear|settle)\s+(?:the\s+)?(?:payment|amount|dues)\s+(?:by|on\s+or\s+before|before)|on\s+or\s+before|due\s*[:\-–]"#)
     static let monthlyPattern = Pattern(#"per\s+(?:calendar\s+)?month|\bmonthly\b|every\s+(?:calendar\s+)?month|each\s+(?:calendar\s+)?month|\bp\.\s?m\.|\bpm\b|a\s+month\b"#)
     static let yearlyPattern = Pattern(#"per\s+(?:annum|year)|\bannual(?:ly)?\b|\byearly\b|every\s+year|\bp\.\s?a\.|each\s+year"#)
     static let quarterlyPattern = Pattern(#"\bquarterly\b|per\s+quarter|every\s+quarter|each\s+quarter"#)
@@ -453,7 +460,9 @@ private struct Context {
 
         for s in sentences {
             guard Context.paymentContext.firstMatch(in: text, range: s) != nil,
-                  Context.penaltyContext.firstMatch(in: text, range: s) == nil else { continue }
+                  Context.penaltyContext.firstMatch(in: text, range: s) == nil,
+                  Context.pastPayment.firstMatch(in: text, range: s) == nil,
+                  Context.exampleContext.firstMatch(in: text, range: s) == nil else { continue }
             var mentions = amounts(in: s)
             // Drop amount-in-words that repeat a numeric amount in the same sentence.
             mentions = mentions.filter { m in !(m.fromWords && mentions.contains { !$0.fromWords && $0.money == m.money }) }
@@ -466,7 +475,8 @@ private struct Context {
             var sentenceDates = dueCandidates(in: s)
             // "…remains outstanding. The amount was due on 25/09/2026."
             if sentenceDates.isEmpty, let idx = sentences.firstIndex(of: s), idx + 1 < sentences.count,
-               sub(sentences[idx + 1]).lowercased().contains("due"), amounts(in: sentences[idx + 1]).isEmpty {
+               Context.dueLabel.firstMatch(in: text, range: sentences[idx + 1]) != nil || sub(sentences[idx + 1]).lowercased().contains("due"),
+               amounts(in: sentences[idx + 1]).isEmpty {
                 sentenceDates = dueCandidates(in: sentences[idx + 1])
             }
             let sentenceRelatives = relatives(in: s)
@@ -617,7 +627,8 @@ private struct Context {
 
     mutating func extractObligations() {
         for s in sentences {
-            guard let m = Context.dutyPattern.firstMatch(in: text, range: s), m.range.location == s.location else { continue }
+            guard let m = Context.dutyPattern.firstMatch(in: text, range: s), m.range.location == s.location,
+                  Context.exampleContext.firstMatch(in: text, range: s) == nil else { continue }
             let d = dates(in: s).first
             let rel = relatives(in: s).first
             guard d != nil || rel != nil else { continue }

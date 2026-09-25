@@ -16,8 +16,8 @@ enum ShareInbox {
 
     /// Imports every waiting file and returns the new records.
     @MainActor
-    static func importPending(importer: DocumentImporter, context: ModelContext) -> (imported: [DocumentRecord], errors: [String]) {
-        guard let inbox = inboxURL,
+    static func importPending(importer: DocumentImporter, context: ModelContext, inbox: URL? = ShareInbox.inboxURL) -> (imported: [DocumentRecord], errors: [String]) {
+        guard let inbox,
               let files = try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: [.creationDateKey]) else {
             return ([], [])
         }

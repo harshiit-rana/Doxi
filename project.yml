@@ -89,6 +89,17 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+  DoxiUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: AppUITests
+    dependencies:
+      - target: Doxi
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Doxi
 schemes:
   Doxi:
     build:
@@ -97,3 +108,4 @@ schemes:
     test:
       targets:
         - DoxiAppTests
+        - DoxiUITests

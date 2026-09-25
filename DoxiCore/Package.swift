@@ -20,5 +20,7 @@ let package = Package(
         .target(name: "DoxiReader", dependencies: ["DoxiCore"]),
         .executableTarget(name: "DoxiEval", dependencies: ["DoxiCore", "DoxiReader"]),
         .testTarget(name: "DoxiCoreTests", dependencies: ["DoxiCore"]),
+        // Real PDFKit/Vision integration tests; they only run on Apple platforms.
+        .testTarget(name: "DoxiReaderTests", dependencies: ["DoxiCore", "DoxiReader"]),
     ]
 )

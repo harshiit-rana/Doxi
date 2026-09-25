@@ -58,8 +58,11 @@ public enum PartyMatcher {
         let smaller = sa.count <= sb.count ? sa : sb
         let larger = sa.count <= sb.count ? sb : sa
         if smaller.isSubset(of: larger) {
-            let meaningful = smaller.contains { $0.count >= 4 } || smaller.count >= 2
-            return meaningful ? 0.9 : 0.5
+            // "Rana Digital" inside "Rana Digital Studio" is a strong signal; a single shared
+            // word ("Rana", "Harshit") is not: many people share a first or last name, so it
+            // only makes the party a candidate and the user is asked.
+            if smaller.count >= 2 { return 0.9 }
+            return smaller.contains { $0.count >= 3 } ? 0.65 : 0.4
         }
         // OCR noise: near-identical strings.
         let editRatio = 1 - Double(levenshtein(ca, cb)) / Double(max(ca.count, cb.count))

@@ -110,6 +110,45 @@ extension String {
     var collapsedWhitespace: String { split(whereSeparator: { $0.isWhitespace }).joined(separator: " ") }
 }
 
+extension FieldKind {
+    /// Label that fits the document: an invoice's or letter's own date is its
+    /// "Document date", not an "Effective date".
+    func label(for type: DocumentType?) -> String {
+        if self == .effectiveDate, let type, !type.isAgreement { return "Document date" }
+        if self == .endDate, type == .quotation { return "Valid until" }
+        return displayName
+    }
+}
+
+/// Marks a date Doxi calculated from a relative phrase, so it is never mistaken
+/// for a date written in the document.
+struct DerivedDateNote: View {
+    let explanation: String
+
+    var body: some View {
+        Label("Calculated: \(explanation)", systemImage: "function")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Calculated date, not written in the document. \(explanation)")
+    }
+}
+
+extension FieldValue {
+    /// Explanation for a derived date in this value, if any.
+    var derivedDateExplanation: String? {
+        let due: DateValue?
+        switch self {
+        case .date(let d): due = d
+        case .payment(let p): due = p.due
+        case .obligation(let o): due = o.due
+        default: due = nil
+        }
+        guard let d = due, d.isDerived, let rel = d.relative else { return nil }
+        if let base = rel.baseDate { return "\(rel.phrase), base date \(base.numericString)" }
+        return "\(rel.phrase); the base date is not known yet"
+    }
+}
+
 extension FinancialDirection {
     var symbol: String {
         switch self {
@@ -174,6 +213,9 @@ struct ObligationRow: View {
                     }
                     if obligation.recurrence != nil {
                         Image(systemName: "repeat").font(.caption).foregroundStyle(.secondary).accessibilityLabel("Recurring")
+                    }
+                    if obligation.dueDateExplanation != nil {
+                        Text("Calculated date").font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }

@@ -44,7 +44,8 @@ public struct DocumentReader: Sendable {
                 results.append(PageResult(text: PageText(index: i, source: .none, lines: []), warning: "Page \(i + 1) could not be opened."))
                 continue
             }
-            results.append(read(page: page, index: i))
+            // Rendered page images are large; release them page by page on long documents.
+            results.append(autoreleasepool { read(page: page, index: i) })
         }
         return results
     }
@@ -121,7 +122,7 @@ public struct DocumentReader: Sendable {
         }
         guard let b = best, !b.lines.isEmpty else {
             return PageResult(text: PageText(index: index, source: .none, lines: []),
-                              warning: "No text was recognised on page \(index + 1)" + (lastError.map { " (\($0))" } ?? "") + ".")
+                              warning: "Page \(index + 1) appears blank or unreadable" + (lastError.map { " (\($0))" } ?? "") + ".")
         }
         let avg = b.lines.map(\.confidence).reduce(0, +) / Double(b.lines.count)
         return PageResult(text: PageText(index: index, source: .ocr, lines: b.lines, appliedRotation: b.rotation),

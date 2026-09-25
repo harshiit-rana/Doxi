@@ -1,12 +1,19 @@
 {
   "document_type": "rental_agreement",
-  "parties": ["Anjali Deshpande", "Rana Digital Studio"],
+  "parties": [
+    "Anjali Deshpande",
+    "Rana Digital Studio"
+  ],
   "effective_date": "2026-07-01",
   "end_date": "2027-05-31",
   "payments": [
-    {"amount": 25000, "due_date": "2026-07-05", "recurrence": "monthly"},
-    {"amount": 75000, "due_date": null}
+    {
+      "amount": 25000,
+      "due_date": "2026-07-05",
+      "recurrence": "monthly"
+    }
   ],
   "notice_period_days": 30,
-  "renewal_automatic": false
+  "renewal_automatic": false,
+  "_label_notes": "2026-09-25: removed the Rs. 75,000 security deposit from payments. The document says it 'has paid' the deposit on signing, so it is a past payment, not an open obligation. This corrects a labelling error; it was not changed to fit extractor output."
 }

@@ -60,6 +60,9 @@ struct RootView: View {
             }
         }
         .task {
+            #if DEBUG
+            if UITestSupport.shouldSeed { UITestSupport.seed(services: services, context: context) }
+            #endif
             services.lock.lock(ifEnabled: services.settings.appLockEnabled)
             if services.lock.isLocked { await services.lock.unlock() }
         }

@@ -91,8 +91,10 @@ public struct LLMFieldMapper {
         var notes: [String] = []
         var span: SourceSpan?
         var verified: Bool?
+        var occurrences = 1
 
-        if let q = quote, let match = matcher.locate(quote: q, page: pageIndex) {
+        if let q = quote, let match = matcher.locate(quote: q, page: pageIndex, value: value, kind: kind) {
+            occurrences = match.equallyGoodOccurrences
             switch matcher.verify(value, in: match.range) {
             case .verified:
                 verified = true
@@ -101,8 +103,9 @@ public struct LLMFieldMapper {
                 span = matcher.span(for: match.range, quality: match.quality)
             case .notFound:
                 verified = false
-                if let vr = matcher.locateValue(value, page: pageIndex) {
-                    span = matcher.span(for: matcher.sentence(around: vr), quality: .valueOnly)
+                if let vm = matcher.locateValue(value, page: pageIndex, kind: kind) {
+                    occurrences = vm.equallyGoodOccurrences
+                    span = matcher.span(for: matcher.sentence(around: vm.range), quality: .valueOnly)
                     verified = true
                     notes.append("The AI's quote did not contain this value; it was found elsewhere in the document.")
                 } else {
@@ -111,12 +114,16 @@ public struct LLMFieldMapper {
                 }
             }
             if match.quality == .fuzzy { notes.append("The source text matched approximately (possible OCR errors).") }
-        } else if let vr = matcher.locateValue(value, page: pageIndex) {
-            span = matcher.span(for: matcher.sentence(around: vr), quality: .valueOnly)
+        } else if let vm = matcher.locateValue(value, page: pageIndex, kind: kind) {
+            occurrences = vm.equallyGoodOccurrences
+            span = matcher.span(for: matcher.sentence(around: vm.range), quality: .valueOnly)
             verified = true
             notes.append("The AI's quote was not found; the value was located in the document.")
         } else {
             notes.append("This could not be found in the document text.")
+        }
+        if occurrences > 1, let s = span {
+            notes.append("This text appears \(occurrences) times in the document; the highlighted place (\(s.pageLabel)) may not be the one meant.")
         }
         return ExtractedFieldDraft(kind: kind, value: value, origin: .llm, source: span, notes: notes, valueVerifiedInSource: verified)
     }

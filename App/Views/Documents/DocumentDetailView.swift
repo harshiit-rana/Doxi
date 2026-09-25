@@ -25,6 +25,7 @@ struct DocumentDetailView: View {
                         Label(reviewLabel, systemImage: "checklist")
                             .foregroundStyle(.tint)
                     }
+                    .accessibilityIdentifier("reviewLink")
                 }
             }
             if !document.status.isWorking {
@@ -105,7 +106,15 @@ struct DocumentDetailView: View {
                 Label("Sending document text to Anthropic for extraction…", systemImage: "icloud.and.arrow.up")
                     .font(.footnote).foregroundStyle(.secondary)
             } else if document.status.isWorking {
-                HStack { ProgressView(); Text(document.status.displayName + "…").foregroundStyle(.secondary) }
+                HStack {
+                    ProgressView()
+                    if document.status == .readingText, let p = services.processor.readingProgress[document.id] {
+                        Text("Reading page \(p.page) of \(p.total)…").foregroundStyle(.secondary)
+                    } else {
+                        Text(document.status.displayName + "…").foregroundStyle(.secondary)
+                    }
+                }
+                Text("Text recognition runs on this device.").font(.footnote).foregroundStyle(.secondary)
             }
             if document.status == .failed {
                 VStack(alignment: .leading, spacing: 8) {
@@ -247,6 +256,7 @@ struct DetailFieldRow: View {
                     Text(value).foregroundStyle(.primary)
                     if isUser { Text("You").font(.caption.weight(.semibold)).foregroundStyle(.tint) }
                 }
+                if let derived = field.value.derivedDateExplanation { DerivedDateNote(explanation: derived) }
                 if let source = field.source {
                     SourceQuoteView(source: source)
                 } else {
@@ -265,7 +275,7 @@ struct DetailFieldRow: View {
         case .payment(let p): return p.label
         case .clause(let c): return c.category.displayName
         case .party(let p): return p.role ?? "Party"
-        default: return field.kind.displayName
+        default: return field.kind.label(for: field.document?.documentType)
         }
     }
 

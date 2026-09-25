@@ -16,7 +16,7 @@ struct HomeView: View {
 
     /// Obligations of confirmed documents only.
     var tracked: [ObligationRecord] {
-        obligations.filter { $0.document?.status == .confirmed }
+        obligations.filter { $0.document?.confirmedAt != nil }
             .sorted { ($0.dueDateISO ?? "9999") < ($1.dueDateISO ?? "9999") }
     }
 
@@ -141,7 +141,9 @@ struct HomeView: View {
         if !t.owedToMe.isEmpty || !t.iOwe.isEmpty || t.unassignedCount > 0 {
             Section {
                 MoneyTotalRow(title: "Owed to me", amounts: t.owedToMe, symbol: FinancialDirection.owedToMe.symbol, tint: .green)
+                    .accessibilityIdentifier("owedToMe")
                 MoneyTotalRow(title: "I owe", amounts: t.iOwe, symbol: FinancialDirection.iOwe.symbol, tint: .orange)
+                    .accessibilityIdentifier("iOwe")
                 if t.unassignedCount > 0 {
                     Text("\(t.unassignedCount) open payment\(t.unassignedCount == 1 ? " has" : "s have") no direction yet and \(t.unassignedCount == 1 ? "is" : "are") not counted.")
                         .font(.footnote).foregroundStyle(.secondary)

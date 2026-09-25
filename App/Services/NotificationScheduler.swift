@@ -38,14 +38,7 @@ final class NotificationScheduler: NSObject, UNUserNotificationCenterDelegate {
     func reschedule(context: ModelContext, settings: AppSettings) async {
         await refreshAuthorization()
         let obligations = (try? context.fetch(FetchDescriptor<ObligationRecord>())) ?? []
-        let today = CalendarDate.today()
-        let candidates: [ReminderCandidate] = obligations.compactMap { ob in
-            guard ob.remindersEnabled, let due = ob.dueDate, let doc = ob.document, doc.status == .confirmed else { return nil }
-            let who = ob.counterparty ?? doc.title
-            return ReminderCandidate(obligationID: ob.id, title: ob.title, body: who, dueDate: due,
-                                     recurrence: ob.recurrence, offsets: ob.reminderOffsets,
-                                     isOpen: ob.status(today: today).isOpen)
-        }
+        let candidates = NotificationScheduler.candidates(from: obligations, today: .today())
         let planner = ReminderPlanner(hour: settings.reminderHour, minute: settings.reminderMinute)
         let plan = planner.plan(candidates, now: .now)
         let planned = Set(plan.map(\.identifier))
@@ -73,6 +66,17 @@ final class NotificationScheduler: NSObject, UNUserNotificationCenterDelegate {
             try? await center.add(UNNotificationRequest(identifier: item.identifier, content: content, trigger: trigger))
         }
         scheduledCount = plan.count
+    }
+
+    /// Obligations that should have reminders: from documents the user confirmed,
+    /// still open, with a due date and reminders switched on.
+    static func candidates(from obligations: [ObligationRecord], today: CalendarDate) -> [ReminderCandidate] {
+        obligations.compactMap { ob in
+            guard ob.remindersEnabled, let due = ob.dueDate, let doc = ob.document, doc.confirmedAt != nil,
+                  ob.status(today: today).isOpen else { return nil }
+            return ReminderCandidate(obligationID: ob.id, title: ob.title, body: ob.counterparty ?? doc.title, dueDate: due,
+                                     recurrence: ob.recurrence, offsets: ob.reminderOffsets, isOpen: true)
+        }
     }
 
     // MARK: UNUserNotificationCenterDelegate
