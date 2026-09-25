@@ -59,39 +59,36 @@ struct PDFKitView: UIViewRepresentable {
     }
 }
 
-/// Shows the original document with one source highlighted.
-struct SourceSheet: View {
+/// Shows the original document at the source of a field, with the text highlighted.
+/// Pushed onto the navigation stack from any field row.
+struct SourceView: View {
     let document: DocumentRecord
     let source: SourceSpan
     var fieldLabel: String?
     @Environment(AppServices.self) private var services
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                PDFKitView(url: services.fileStore.url(for: document.storedFilename), highlight: source,
-                           pageLines: document.sortedPages.first { $0.index == source.pageIndex }?.pageText.lines)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(source.pageLabel).font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text(matchDescription).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Text("“\(source.quote.collapsedWhitespace)”").font(.callout)
-                    if let conf = source.ocrConfidence, conf < 0.5 {
-                        Label("This part of the scan was hard to read.", systemImage: "exclamationmark.triangle")
-                            .font(.caption).foregroundStyle(.orange)
-                    }
+        VStack(spacing: 0) {
+            PDFKitView(url: services.fileStore.url(for: document.storedFilename), highlight: source,
+                       pageLines: document.sortedPages.first { $0.index == source.pageIndex }?.pageText.lines)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(source.pageLabel).font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(matchDescription).font(.caption).foregroundStyle(.secondary)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.bar)
+                Text("“\(source.quote.collapsedWhitespace)”").font(.callout)
+                if let conf = source.ocrConfidence, conf < 0.5 {
+                    Label("This part of the scan was hard to read.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             }
-            .navigationTitle(fieldLabel ?? "Source")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.bar)
         }
+        .navigationTitle(fieldLabel ?? "Source")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     var matchDescription: String {

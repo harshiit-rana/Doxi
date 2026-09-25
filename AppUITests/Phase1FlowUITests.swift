@@ -72,11 +72,11 @@ final class Phase1FlowUITests: XCTestCase {
         let fee = element(containing: "₹80,000")
         scrollTo(fee, "total amount should be shown")
         fee.tap()
-        waitFor(app.navigationBars["Total amount"], 10, "source sheet for the tapped field should open")
+        waitFor(app.navigationBars["Total amount"], 10, "source view for the tapped field should open")
         XCTAssertTrue(element(containing: "The total project fee shall be INR 80,000").exists, "sheet shows the source quote")
         let how = ["Exact text", "Found in scanned text"].contains { element(containing: $0).exists }
         XCTAssertTrue(how, "sheet says how the source was matched")
-        app.navigationBars["Total amount"].buttons["Done"].tap()
+        app.navigationBars["Total amount"].buttons.firstMatch.tap()
 
         // Review: accept high-confidence details and confirm.
         let review = app.buttons["reviewLink"]

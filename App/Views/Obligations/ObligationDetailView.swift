@@ -108,8 +108,8 @@ struct ObligationDetailView: View {
         }
         .navigationTitle(obligation.category.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $sourceItem) { item in
-            if let doc = obligation.document { SourceSheet(document: doc, source: item.source, fieldLabel: item.label) }
+        .navigationDestination(item: $sourceItem) { item in
+            if let doc = obligation.document { SourceView(document: doc, source: item.source, fieldLabel: item.label) }
         }
     }
 

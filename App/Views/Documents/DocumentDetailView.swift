@@ -58,8 +58,8 @@ struct DocumentDetailView: View {
         }
         .navigationTitle(document.title)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $sourceItem) { item in
-            SourceSheet(document: document, source: item.source, fieldLabel: item.label)
+        .navigationDestination(item: $sourceItem) { item in
+            SourceView(document: document, source: item.source, fieldLabel: item.label)
         }
         .alert("Rename document", isPresented: $renaming) {
             TextField("Title", text: $newTitle)
@@ -226,7 +226,7 @@ struct DocumentDetailView: View {
     }
 }
 
-struct SourceItem: Identifiable {
+struct SourceItem: Identifiable, Hashable {
     let id = UUID()
     let source: SourceSpan
     let label: String

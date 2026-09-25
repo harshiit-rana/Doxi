@@ -42,7 +42,7 @@ jobs:
           grep -E "^/.*/(App|ShareExtension|DoxiCore)/.*warning:" xcodebuild.log | sort -u | head -100 || true
           echo "::endgroup::"
           echo "::group::Test summary"
-          grep -E "Test Case '.*' (passed|failed)|error:|Executed [0-9]+ test" xcodebuild.log | grep -v "Capturing\|Checking" || true
+          grep -iE "Test Case '.*' (passed|failed)|error:|Executed [0-9]+ test" xcodebuild.log | grep -v "Capturing\|Checking" || true
           echo "::endgroup::"
           tail -60 xcodebuild.log
           exit ${STATUS:-0}

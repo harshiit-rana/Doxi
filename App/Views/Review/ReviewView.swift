@@ -62,7 +62,7 @@ struct ReviewView: View {
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { confirmBar }
-        .sheet(item: $sourceItem) { item in SourceSheet(document: document, source: item.source, fieldLabel: item.label) }
+        .navigationDestination(item: $sourceItem) { item in SourceView(document: document, source: item.source, fieldLabel: item.label) }
         .sheet(item: $editing) { target in
             FieldEditorView(kind: target.kind, initial: target.field?.value, parties: document.partyNames) { value in
                 if let field = target.field {
