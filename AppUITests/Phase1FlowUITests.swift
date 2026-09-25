@@ -128,7 +128,10 @@ final class Phase1FlowUITests: XCTestCase {
         let hit = element(containing: "Invoice")
         waitFor(hit, 15, "OCR text of the scanned invoice should be searchable")
         hit.tap()
-        waitFor(element(containing: "View original document"), 10, "search result opens the document")
+        waitFor(app.navigationBars.element(boundBy: 0), 10, "search result opens a document")
+        XCTAssertTrue(app.navigationBars.element(boundBy: 0).identifier.contains("Invoice"), "the OCR invoice opened")
+        let original = element(containing: "View original document")
+        scrollTo(original, "search result opens the document detail")
 
         // Amount search finds the contract.
         app.navigationBars.buttons.firstMatch.tap()
