@@ -60,6 +60,8 @@ final class DocumentRecord {
     var confirmedAt: Date?
     /// Amounts written in the text (minor units) for search.
     var textAmounts: [Int]
+    /// Precomputed search normalisation of `fullText` (see `TextNormalizer.searchKey`).
+    var searchKey: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \DocumentPageRecord.document) var pages: [DocumentPageRecord] = []
     @Relationship(deleteRule: .cascade, inverse: \ExtractedFieldRecord.document) var fields: [ExtractedFieldRecord] = []

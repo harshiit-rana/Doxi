@@ -39,7 +39,20 @@ struct DoxiApp: App {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                  attributes: [.protectionKey: FileProtectionType.completeUnlessOpen])
         try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: dir.path)
-        return dir.appendingPathComponent("Doxi.store")
+        let url = dir.appendingPathComponent("Doxi.store")
+        // Move a store created by earlier builds (SwiftData's default location) so no data is left behind.
+        let legacy = dir.deletingLastPathComponent().appendingPathComponent("default.store")
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: url.path), fm.fileExists(atPath: legacy.path) {
+            for suffix in ["", "-shm", "-wal"] {
+                let from = URL(fileURLWithPath: legacy.path + suffix), to = URL(fileURLWithPath: url.path + suffix)
+                if fm.fileExists(atPath: from.path) {
+                    try? fm.moveItem(at: from, to: to)
+                    try? fm.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: to.path)
+                }
+            }
+        }
+        return url
     }
 
     var body: some Scene {

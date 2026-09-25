@@ -90,6 +90,7 @@ final class DocumentProcessor {
         doc.pageCount = read.pages.count
         let text = DocumentText(pages: read.pages)
         doc.fullText = text.fullText
+        doc.searchKey = TextNormalizer.searchKey(doc.fullText)
         doc.textAmounts = SearchableDocument.amounts(in: doc.fullText).map { Int($0) }
         let sources = Set(read.pages.map(\.source))
         doc.textSourceSummary = sources == [.pdfText] ? "PDF text" : sources == [.ocr] ? "Scanned (OCR)" : sources == [.none] ? "No readable text" : "PDF text and OCR"

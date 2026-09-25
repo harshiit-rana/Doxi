@@ -28,10 +28,13 @@ public struct AnthropicExtractionProvider: ExtractionProvider {
         self.transport = transport ?? AnthropicExtractionProvider.urlSessionTransport
     }
 
+    /// Ephemeral: no cookies, cache or credentials are written to disk for these requests.
+    static let session = URLSession(configuration: .ephemeral)
+
     public static let urlSessionTransport: @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse) = { request in
         // Continuation-based so it also builds against swift-corelibs-foundation (tests on Linux).
         let (data, response): (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            let task = AnthropicExtractionProvider.session.dataTask(with: request) { data, response, error in
                 if let error {
                     continuation.resume(throwing: ExtractionProviderError.network(error.localizedDescription))
                 } else if let data, let response {

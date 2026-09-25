@@ -76,6 +76,25 @@ public enum TextNormalizer {
     /// Normalised form used for comparisons (no offset map).
     public static func normalize(_ s: String) -> String { NormalizedText(s).text }
 
+    /// Fast normalisation for search: case/diacritic/width folded, punctuation and
+    /// whitespace reduced to single spaces. No offset map (not for highlighting).
+    public static func searchKey(_ s: String) -> String {
+        let folded = s.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        var out = String.UnicodeScalarView()
+        out.reserveCapacity(folded.unicodeScalars.count)
+        var lastSpace = true
+        for u in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(u) || u == "₹" {
+                out.append(u)
+                lastSpace = false
+            } else if !lastSpace {
+                out.append(" ")
+                lastSpace = true
+            }
+        }
+        return String(out).lowercased()
+    }
+
     /// Lowercase alphanumeric tokens.
     public static func tokens(_ s: String) -> [String] {
         normalize(s).split(whereSeparator: { !($0.isLetter || $0.isNumber) }).map(String.init)

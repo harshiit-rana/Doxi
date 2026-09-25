@@ -240,6 +240,7 @@ struct FieldReviewRow: View {
     var onEdit: (ExtractedFieldRecord) -> Void
     @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var context
+    @State private var confirmUnverified = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -274,7 +275,13 @@ struct FieldReviewRow: View {
             }
             HStack(spacing: 12) {
                 if field.verification == .pending {
-                    Button { services.obligations.confirm(field, in: document); try? context.save() } label: {
+                    Button {
+                        if field.confidence == .unverified && field.origin != .user {
+                            confirmUnverified = true
+                        } else {
+                            services.obligations.confirm(field, in: document); try? context.save()
+                        }
+                    } label: {
                         Label("Confirm", systemImage: "checkmark")
                     }
                     .buttonStyle(.borderedProminent)
@@ -294,6 +301,13 @@ struct FieldReviewRow: View {
             .labelStyle(.titleAndIcon)
         }
         .padding(.vertical, 4)
+        .alert("Not found in the document", isPresented: $confirmUnverified) {
+            Button("Confirm anyway") { services.obligations.confirm(field, in: document); try? context.save() }
+            Button("Edit instead") { onEdit(field) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Doxi could not find this value in the document text. Only confirm it if you have checked it yourself.")
+        }
     }
 
     var title: String {

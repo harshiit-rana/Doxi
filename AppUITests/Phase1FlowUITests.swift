@@ -19,7 +19,17 @@ final class Phase1FlowUITests: XCTestCase {
     }
 
     func waitFor(_ e: XCUIElement, _ timeout: TimeInterval = 20, _ message: String) {
-        XCTAssertTrue(e.waitForExistence(timeout: timeout), message)
+        XCTAssertTrue(e.waitForExistence(timeout: timeout), message + "\n" + app.debugDescription.prefix(4000))
+    }
+
+    /// Lists render rows lazily; scroll until the element exists and is hittable.
+    func scrollTo(_ e: XCUIElement, _ message: String, maxSwipes: Int = 8) {
+        var swipes = 0
+        while !(e.exists && e.isHittable) && swipes < maxSwipes {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(e.exists, message + "\n" + app.debugDescription.prefix(4000))
     }
 
     /// Accepts the system notification permission alert if it appears.
@@ -47,14 +57,17 @@ final class Phase1FlowUITests: XCTestCase {
         contract.tap()
 
         // Tapping an extracted value opens the original with the source.
+        waitFor(app.buttons["reviewLink"], 15, "detail screen should offer review")
         let fee = element(containing: "₹80,000")
-        waitFor(fee, 10, "total amount should be shown")
+        scrollTo(fee, "total amount should be shown")
         fee.tap()
         waitFor(element(containing: "Exact text"), 10, "source sheet should show the exact source text")
         app.buttons["Done"].tap()
 
         // Review: accept high-confidence details and confirm.
-        app.buttons["reviewLink"].tap()
+        let review = app.buttons["reviewLink"]
+        for _ in 0..<8 where !(review.exists && review.isHittable) { app.swipeDown() }
+        review.tap()
         waitFor(element(containing: "Who are you"), 10, "identity question shown")
         let accept = app.buttons["acceptHighConfidence"]
         waitFor(accept, 10, "high-confidence details can be accepted together")
@@ -67,8 +80,9 @@ final class Phase1FlowUITests: XCTestCase {
         // Dashboard: money owed to the user from the two confirmed installments.
         app.tabBars.buttons["Home"].tap()
         let owed = app.descendants(matching: .any)["owedToMe"]
-        waitFor(owed, 20, "money section should appear")
+        scrollTo(owed, "money section should appear")
         XCTAssertTrue(owed.label.contains("80,000"), "owed to me should total both installments, got: \(owed.label)")
+        for _ in 0..<8 { app.swipeDown() }
         waitFor(element(containing: "40,000"), 10, "upcoming installment listed")
 
         // Reminders were scheduled for the confirmed obligations.

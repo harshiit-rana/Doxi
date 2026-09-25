@@ -34,9 +34,12 @@ public struct SearchableDocument: Sendable {
     public var tags: [String]
     /// Amounts written anywhere in the text (minor units), precomputed.
     public var textAmounts: Set<Int64>
+    /// `TextNormalizer.searchKey(fullText)`, precomputed (normalising long text per query is slow).
+    public var searchKeyBody: String
 
     public init(id: UUID, filename: String, title: String, documentType: String, parties: [String], fields: [Field],
-                obligations: [Obligation], fullText: String, tags: [String] = [], textAmounts: Set<Int64>? = nil) {
+                obligations: [Obligation], fullText: String, tags: [String] = [], textAmounts: Set<Int64>? = nil,
+                searchKeyBody: String? = nil) {
         self.id = id
         self.filename = filename
         self.title = title
@@ -47,6 +50,7 @@ public struct SearchableDocument: Sendable {
         self.fullText = fullText
         self.tags = tags
         self.textAmounts = textAmounts ?? SearchableDocument.amounts(in: fullText)
+        self.searchKeyBody = searchKeyBody ?? TextNormalizer.searchKey(fullText)
     }
 
     public static func amounts(in text: String) -> Set<Int64> {
@@ -76,7 +80,7 @@ public struct SearchQuery: Sendable {
     public init(_ raw: String) {
         self.raw = raw
         let trimmed = raw.trimmed()
-        tokens = TextNormalizer.tokens(trimmed)
+        tokens = TextNormalizer.searchKey(trimmed).split(separator: " ").map(String.init)
         date = DateParser.mentions(in: trimmed).first?.date
         if date == nil, tokens.count <= 2, let m = tokens.compactMap({ t -> Int? in
             guard t.count >= 3, let n = DateParser.monthNumber(t) else { return nil }
@@ -148,12 +152,12 @@ public enum SearchEngine {
         }
 
         // Text match: every token must appear somewhere.
-        let title = TextNormalizer.normalize(doc.title + " " + doc.filename)
-        let partiesText = TextNormalizer.normalize(doc.parties.joined(separator: " | "))
-        let type = TextNormalizer.normalize(doc.documentType + " " + doc.tags.joined(separator: " "))
-        let body = TextNormalizer.normalize(doc.fullText)
-        let fieldTexts = doc.fields.map { ($0, TextNormalizer.normalize($0.label + " " + $0.value)) }
-        let obligationTexts = doc.obligations.map { ($0, TextNormalizer.normalize($0.title + " " + $0.status.displayName)) }
+        let title = TextNormalizer.searchKey(doc.title + " " + doc.filename)
+        let partiesText = TextNormalizer.searchKey(doc.parties.joined(separator: " | "))
+        let type = TextNormalizer.searchKey(doc.documentType + " " + doc.tags.joined(separator: " "))
+        let body = doc.searchKeyBody
+        let fieldTexts = doc.fields.map { ($0, TextNormalizer.searchKey($0.label + " " + $0.value)) }
+        let obligationTexts = doc.obligations.map { ($0, TextNormalizer.searchKey($0.title + " " + $0.status.displayName)) }
 
         var allTokensFound = !q.tokens.isEmpty
         var textScore = 0.0
@@ -181,7 +185,7 @@ public enum SearchEngine {
         if allTokensFound {
             score += textScore
             // Whole phrase bonus.
-            let phrase = TextNormalizer.normalize(q.raw)
+            let phrase = TextNormalizer.searchKey(q.raw)
             if q.tokens.count > 1 && (title.contains(phrase) || partiesText.contains(phrase)) { score += 5 }
         } else if score == 0 {
             return nil
@@ -204,10 +208,9 @@ public enum SearchEngine {
     }
 
     static func snippet(forToken token: String, in text: String) -> String? {
-        let normalized = NormalizedText(text)
-        let r = (normalized.text as NSString).range(of: token)
+        let r = (text as NSString).range(of: token, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive])
         guard r.location != NSNotFound else { return nil }
-        return window(around: normalized.originalRange(of: r), in: text)
+        return window(around: r, in: text)
     }
 
     static func snippet(for amount: Money, in text: String) -> String? {

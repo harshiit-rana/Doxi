@@ -16,7 +16,8 @@ enum SearchService {
         return SearchableDocument(id: doc.id, filename: doc.originalFilename, title: doc.title,
                                   documentType: doc.documentType?.displayName ?? "", parties: doc.partyNames,
                                   fields: fields, obligations: obligations, fullText: doc.fullText,
-                                  textAmounts: Set(doc.textAmounts.map { Int64($0) }))
+                                  textAmounts: Set(doc.textAmounts.map { Int64($0) }),
+                                  searchKeyBody: doc.searchKey.isEmpty && !doc.fullText.isEmpty ? nil : doc.searchKey)
     }
 
     struct Hit: Identifiable {
