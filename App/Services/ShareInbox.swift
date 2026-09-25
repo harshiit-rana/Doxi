@@ -24,17 +24,17 @@ enum ShareInbox {
         var imported: [DocumentRecord] = []
         var errors: [String] = []
         for file in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where !file.lastPathComponent.hasPrefix(".") {
+            // The extension prefixes names with a timestamp; restore the original name.
+            let original = file.lastPathComponent.split(separator: "_", maxSplits: 1).last.map(String.init) ?? file.lastPathComponent
+            let named = file.deletingLastPathComponent().appendingPathComponent(original)
+            let source = (try? FileManager.default.moveItem(at: file, to: named)) != nil ? named : file
             do {
-                // The extension prefixes names with a timestamp; restore the original name.
-                let original = file.lastPathComponent.split(separator: "_", maxSplits: 1).last.map(String.init) ?? file.lastPathComponent
-                let named = file.deletingLastPathComponent().appendingPathComponent(original)
-                let source = (try? FileManager.default.moveItem(at: file, to: named)) != nil ? named : file
                 imported.append(try importer.importFile(at: source, origin: .share, context: context))
-                try? FileManager.default.removeItem(at: source)
             } catch {
                 errors.append(error.localizedDescription)
-                try? FileManager.default.removeItem(at: file)
             }
+            // Remove the inbox copy whether or not the import worked, so it is not retried forever.
+            try? FileManager.default.removeItem(at: source)
         }
         return (imported, errors)
     }

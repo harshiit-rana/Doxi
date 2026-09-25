@@ -204,6 +204,7 @@ struct OnboardingView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfileRecord]
+    @Query private var documents: [DocumentRecord]
     @State private var name = ""
     @State private var businessName = ""
     @State private var gstin = ""
@@ -250,6 +251,13 @@ struct OnboardingView: View {
         let g = gstin.trimmingCharacters(in: .whitespaces).uppercased()
         profile.gstin = g.isEmpty ? nil : g
         profile.updatedAt = .now
+        // Documents may have been imported (or shared in) before the profile existed.
+        if profile.identity.isComplete {
+            for doc in documents where doc.identityDecision != .userChosen {
+                services.processor.matchIdentity(doc, profile: profile.identity)
+                services.processor.updateTitle(doc)
+            }
+        }
         try? context.save()
         services.settings.hasCompletedOnboarding = true
     }

@@ -112,4 +112,16 @@ final class AppWorkflowTests: XCTestCase {
         XCTAssertThrowsError(try importer.importFile(at: txt, origin: .importFile, context: context))
         XCTAssertTrue(try context.fetch(FetchDescriptor<DocumentRecord>()).isEmpty)
     }
+
+    func testDocumentProcessedBeforeProfileIsMatchedLater() async {
+        let text = DocumentText(plainText: "FREELANCE AGREEMENT\nThis Agreement is made between ABC Technologies (hereinafter referred to as the \"Client\") and Harshit Rana (hereinafter referred to as the \"Freelancer\").")
+        let doc = DocumentRecord(title: "x", originalFilename: "x.pdf", storedFilename: "x.pdf", origin: .share)
+        context.insert(doc)
+        let processor = DocumentProcessor(fileStore: FileStore(root: FileManager.default.temporaryDirectory), settings: settings)
+        processor.apply(await ExtractionPipeline().run(text), to: doc, context: context, profile: nil)
+        XCTAssertEqual(doc.identityDecision, .undetermined)
+        processor.matchIdentity(doc, profile: IdentityProfile(name: "Harshit Rana"))
+        XCTAssertEqual(doc.identityDecision, .automatic)
+        XCTAssertEqual(doc.userPartyName, "Harshit Rana")
+    }
 }

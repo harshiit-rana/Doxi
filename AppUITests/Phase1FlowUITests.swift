@@ -83,6 +83,8 @@ final class Phase1FlowUITests: XCTestCase {
         for _ in 0..<8 where !(review.exists && review.isHittable) { app.swipeDown() }
         review.tap()
         waitFor(element(containing: "Who are you"), 10, "identity question shown")
+        XCTAssertTrue(element(containing: "Matched to your profile").exists,
+                      "documents imported before onboarding must be matched once the profile exists")
         // Soft check: a quote inside a review row opens the source (buttons in list rows).
         continueAfterFailure = true
         let quote = element(containing: "The first installment")
