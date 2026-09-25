@@ -196,7 +196,7 @@ public final class SourceMatcher: @unchecked Sendable {
     /// Checks that the value itself is written inside `range` of the full text.
     public func verify(_ value: FieldValue, in range: NSRange) -> Verification {
         let window = expanded(range, by: 40)
-        let s = ns.substring(with: window)
+        let s = OCRDigits.normalize(ns.substring(with: window))
         switch value {
         case .money(let m):
             return containsAmount(m, in: s) ? .verified : .notFound
@@ -223,6 +223,26 @@ public final class SourceMatcher: @unchecked Sendable {
         }
     }
 
+    /// Checks a value against several source ranges together: for a payment the
+    /// amount may be on one line and its due date on another.
+    public func verify(_ value: FieldValue, inAny ranges: [NSRange]) -> Verification {
+        guard !ranges.isEmpty else { return .notFound }
+        let results = ranges.map { verify(value, in: $0) }
+        if results.contains(.verified) { return .verified }
+        if results.allSatisfy({ $0 == .notApplicable }) { return .notApplicable }
+        if case .payment(let p) = value {
+            let amountOK = p.amount.map { a in ranges.contains { verify(.money(a), in: $0) == .verified } } ?? true
+            let dateOK = p.due.map { d in ranges.contains { verify(.date(d), in: $0) == .verified } } ?? true
+            return amountOK && dateOK ? .verified : .notFound
+        }
+        return .notFound
+    }
+
+    /// Full-text range of a source span.
+    public func fullTextRange(of span: SourceSpan) -> NSRange? {
+        document.fullTextRange(ofPage: span.pageIndex).map { NSRange(location: $0.location + span.range.location, length: span.range.length) }
+    }
+
     func expanded(_ r: NSRange, by n: Int) -> NSRange {
         let start = max(0, r.location - n)
         let end = min(ns.length, r.location + r.length + n)
@@ -236,6 +256,12 @@ public final class SourceMatcher: @unchecked Sendable {
     }
 
     func containsDate(_ d: DateValue, in s: String) -> Bool {
+        // A calculated date is not written anywhere; its basis ("5th of each month") is
+        // checked by the caller's quote, so only the written parts are verified here.
+        if d.computedFrom != nil { return true }
+        if let rel = d.relative, rel.isTermLength == true {
+            return DurationParser.mentions(in: s).contains { $0.duration.approximateDays == rel.offset.approximateDays }
+        }
         if let date = d.date {
             let found = DateParser.mentions(in: s, preferMonthFirst: preferMonthFirst)
             if found.contains(where: { $0.date == date }) { return true }

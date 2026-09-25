@@ -1,11 +1,32 @@
 {
   "document_type": "service_agreement",
-  "parties": ["Brightpath Education Private Limited", "Studio Kite"],
+  "parties": [
+    "Brightpath Education Private Limited",
+    "Studio Kite"
+  ],
   "effective_date": "2026-10-01",
   "end_date": "2027-09-30",
   "payments": [
-    {"amount": 150000, "due_date": "2026-10-01", "recurrence": "monthly"}
+    {
+      "amount": 150000,
+      "due_date": "2026-10-01",
+      "recurrence": "monthly"
+    }
   ],
   "notice_period_days": 60,
-  "renewal_automatic": true
+  "renewal_automatic": true,
+  "obligations": [
+    {
+      "category": "payment",
+      "due_date": "2026-10-01"
+    },
+    {
+      "category": "renewal",
+      "due_date": "2027-09-30"
+    },
+    {
+      "category": "noticeDeadline",
+      "due_date": "2027-08-01"
+    }
+  ]
 }

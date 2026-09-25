@@ -21,7 +21,7 @@ public enum DocumentClassifier {
         Rule(type: .rentalAgreement, pattern: Pattern(#"rent(?:al)?\s+agreement|lease\s+(?:agreement|deed)|leave\s+and\s+licen[cs]e|\blandlord\b|\btenant\b|\blessee\b|\blessor\b|monthly\s+rent"#), weight: 3),
         Rule(type: .purchaseOrder, pattern: Pattern(#"purchase\s+order|\bP\.?O\.?\s+(?:no|number)"#), weight: 3),
         Rule(type: .paymentSchedule, pattern: Pattern(#"payment\s+schedule"#), weight: 1.5),
-        Rule(type: .businessLetter, pattern: Pattern(#"dear\s+(?:sir|madam|mr|ms)|yours\s+(?:faithfully|sincerely|truly)|^[ \t]*subject[ \t]*:"#, anchorsMatchLines: true), weight: 2),
+        Rule(type: .businessLetter, pattern: Pattern(#"dear\s+(?:sir|madam|mr|ms)|yours\s+(?:faithfully|sincerely|truly)|^[ \t]*subject[ \t]*:|^[ \t]*(?:hi|hello)\s+[a-z]+[,!]|^[ \t]*(?:warm\s+|best\s+|kind\s+)?regards[,.]?[ \t]*$"#, anchorsMatchLines: true), weight: 2),
         Rule(type: .contract, pattern: Pattern(#"\bagreement\b|\bcontract\b"#), weight: 1),
     ]
 
@@ -34,7 +34,8 @@ public enum DocumentClassifier {
     public static func classify(_ text: String) -> Result? {
         let ns = text as NSString
         let scanLength = min(ns.length, 6000)
-        let lines = SentenceSplitter.lineRanges(in: text).prefix(6)
+        // The title area: the first few short lines at the top of the document.
+        let lines = SentenceSplitter.lineRanges(in: text).prefix(4).filter { $0.location < 400 && $0.length <= 90 }
         let titleEnd = lines.last.map { $0.location + $0.length } ?? 0
         var scores: [DocumentType: (score: Double, rule: Rule, evidence: NSRange, inTitle: Bool)] = [:]
         for rule in rules {
@@ -53,7 +54,12 @@ public enum DocumentClassifier {
                 scores[rule.type] = (score, rule, titleHit ?? first.range, titleHit != nil)
             }
         }
-        guard let b = scores.values.max(by: { $0.score < $1.score }) else { return nil }
+        // Deterministic choice: highest score, ties go to the more specific type (rule order;
+        // the generic "contract" rule is last).
+        let order = rules.map(\.type)
+        guard let b = scores.values.max(by: { a, b in
+            a.score != b.score ? a.score < b.score : order.firstIndex(of: a.rule.type)! > order.firstIndex(of: b.rule.type)!
+        }) else { return nil }
         return Result(type: b.rule.type, evidence: b.evidence, inTitle: b.inTitle)
     }
 }

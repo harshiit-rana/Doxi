@@ -108,14 +108,21 @@ public struct DocumentReader: Sendable {
 
         var best: (lines: [TextLine], rotation: Int, score: Double)?
         var lastError: String?
+        var storedLooksSideways = false
         for rotation in orientations {
             do {
                 let lines = try recognize(image, clockwiseRotation: rotation)
                 let chars = lines.reduce(0) { $0 + $1.text.count }
                 let conf = lines.isEmpty ? 0 : lines.map(\.confidence).reduce(0, +) / Double(lines.count)
                 let score = Double(chars) * conf
-                if best == nil || score > best!.score { best = (lines, rotation, score) }
-                if rotation == stored && chars >= options.weakOCRCharacterCount && conf >= 0.4 { break }
+                if rotation == stored {
+                    // Vision can read rotated text, but then the page is still displayed sideways.
+                    storedLooksSideways = DocumentReader.linesAreVertical(lines, rotation: rotation, page: page)
+                }
+                let preferable = best == nil || score > best!.score
+                    || (storedLooksSideways && best!.rotation == stored && rotation != stored && score > best!.score * 0.8)
+                if preferable && !(storedLooksSideways && rotation == stored && best != nil) { best = (lines, rotation, score) }
+                if rotation == stored && chars >= options.weakOCRCharacterCount && conf >= 0.4 && !storedLooksSideways { break }
             } catch {
                 lastError = error.localizedDescription
             }
@@ -128,6 +135,21 @@ public struct DocumentReader: Sendable {
         return PageResult(text: PageText(index: index, source: .ocr, lines: b.lines, appliedRotation: b.rotation),
                           suggestedRotation: b.rotation != stored ? b.rotation : nil,
                           warning: avg < 0.5 ? "Page \(index + 1) is hard to read; check extracted details carefully." : nil)
+    }
+
+    /// True when most recognised lines run vertically in the displayed orientation,
+    /// i.e. the page is shown sideways.
+    static func linesAreVertical(_ lines: [TextLine], rotation: Int, page: PDFPage) -> Bool {
+        let crop = page.bounds(for: .cropBox)
+        let long = lines.filter { $0.text.count >= 8 }
+        guard long.count >= 2 else { return false }
+        let vertical = long.filter { line in
+            // Boxes are in unrotated page space; compare in points, then account for display rotation.
+            let w = line.box.width * Double(crop.width), h = line.box.height * Double(crop.height)
+            let tall = h > w * 1.5
+            return rotation % 180 == 0 ? tall : !tall
+        }
+        return Double(vertical.count) / Double(long.count) > 0.6
     }
 
     /// Renders the page's crop box in unrotated page space, so recognised boxes

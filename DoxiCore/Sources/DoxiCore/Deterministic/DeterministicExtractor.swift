@@ -32,10 +32,13 @@ private struct Context {
     var effectiveDate: CalendarDate?
     var endDate: CalendarDate?
     var totalAmountRange: NSRange?
+    /// Whether the total came from an explicit "total" label (then it is not also a payment).
+    var totalIsExplicit = false
 
     init(document: DocumentText) {
         self.document = document
-        self.text = document.fullText
+        // Values are parsed from OCR-repaired text; quotes still come from the original pages.
+        self.text = OCRDigits.normalize(document.fullText)
         self.ns = text as NSString
         self.sentences = SentenceSplitter.ranges(in: text)
         self.lines = SentenceSplitter.lineRanges(in: text)
@@ -84,10 +87,14 @@ private struct Context {
         return NSRange(location: start, length: max(value.length, end - start))
     }
 
-    mutating func add(_ kind: FieldKind, _ value: FieldValue, range: NSRange, strength: RuleStrength, notes: [String] = []) {
+    mutating func add(_ kind: FieldKind, _ value: FieldValue, range: NSRange, strength: RuleStrength, notes: [String] = [],
+                      extra: [NSRange] = []) {
         let span = document.span(for: TextRange(range), match: .exact)
+        // Supporting text outside the main quote (e.g. a due date on another line).
+        let extras = extra.filter { NSIntersectionRange($0, range).length < $0.length }
+            .compactMap { document.span(for: TextRange($0), match: .exact) }
         out.append(ExtractedFieldDraft(kind: kind, value: value, origin: .deterministic, source: span,
-                                       notes: notes, ruleStrength: strength))
+                                       notes: notes, ruleStrength: strength, additionalSources: extras.isEmpty ? nil : extras))
     }
 
     func amounts(in r: NSRange) -> [AmountMention] { amounts.filter { NSIntersectionRange($0.range, r).length > 0 } }
@@ -126,7 +133,7 @@ private struct Context {
         #"[\s\S]{0,600}?\b(?:and|AND)\s*:?\s+(?-i:(?=(?:M/[Ss]\.?\s*|Mr\.?\s|Ms\.?\s|Mrs\.?\s|Dr\.?\s|Shri\s|Smt\.?\s)?[A-Z0-9]))(?:(?:mr|ms|mrs|dr|shri|smt)\.?\s+)?(.{2,120}?)\s*"# + partyTerminator)
     static let rolePattern = Pattern(#"(?:hereinafter|herein\s*after)\s+(?:jointly\s+)?(?:referred\s+to\s+as|called|known\s+as)\s+(?:the\s+)?["“'‘]?(?:the\s+)?([A-Za-z][A-Za-z ]{1,30}?)["”'’]?\s*(?:\)|,|;|\.|which|and)"#)
     static let labelPattern = Pattern(
-        #"^[ \t]*(client|customer|service\s+provider|freelancer|consultant|vendor|contractor|landlord|lessor|licensor|tenant|lessee|licensee|disclosing\s+party|receiving\s+party|bill(?:ed)?\s+to|invoice\s+to|buyer|seller|supplier|party\s+a|party\s+b|first\s+party|second\s+party)(?:\s+name)?[ \t]*[:\-–][ \t]*(.{0,80})$"#,
+        #"^[ \t]*(client|customer|service\s+provider|freelancer|consultant|developer|designer|agency|vendor|contractor|landlord|lessor|licensor|tenant|lessee|licensee|disclosing\s+party|receiving\s+party|bill(?:ed)?\s+to|invoice\s+to|buyer|seller|supplier|party\s+a|party\s+b|first\s+party|second\s+party)(?:\s+name)?[ \t]*[:\-–][ \t]*(.{0,80})$"#,
         anchorsMatchLines: true)
 
     static func cleanPartyName(_ raw: String) -> String? {
@@ -156,11 +163,24 @@ private struct Context {
         add(.party, .party(value), range: range, strength: strength)
     }
 
+    static let amongIntro = Pattern(#"\b(?:by\s+and\s+)?(?:among(?:st)?|between)\s*:[ \t]*\n"#)
+    static let numberedParty = Pattern(#"^[ \t]*(?:\d{1,2}[.)]|\(?[a-z]\))[ \t]*(.+?)[ \t]*(?:,|\(|;|$)"#, anchorsMatchLines: true)
+    static let quotedRole = Pattern(#"\(\s*["“']?([A-Za-z][A-Za-z ]{1,30}?)["”']?\s*\)"#)
     static let fromToLabel = Pattern(#"^[ \t]*(from|to)[ \t]*[:\-–][ \t]*(.{0,80})$"#, anchorsMatchLines: true)
     static let letterheadReject = Pattern(#"invoice|quotation|estimate|\bdate\b|\bno\b|gstin|\bpan\b|phone|mobile|email|@|www\.|\d{3,}|bill|tax"#)
 
     mutating func extractParties() {
         let head = NSRange(location: 0, length: min(ns.length, 5000))
+        // "by and among: 1. Horizon Events Pvt Ltd, Gurugram ("Organiser"); 2. …"
+        if let intro = Context.amongIntro.firstMatch(in: text, range: head) {
+            var cursor = intro.range.location + intro.range.length
+            for line in lines where line.location >= cursor {
+                guard let m = Context.numberedParty.firstMatch(in: text, range: line), let nr = m.groupRange(1) else { break }
+                let role = Context.quotedRole.firstMatch(in: text, range: line)?.group(1, in: ns)
+                addParty(sub(nr), role: role, range: nr, strength: .weak)
+                cursor = line.location + line.length
+            }
+        }
         if docType == .invoice || docType == .quotation {
             var hasFrom = false
             for m in Context.fromToLabel.matches(in: text, range: head) {
@@ -199,7 +219,10 @@ private struct Context {
             if nameRange == nil, let idx = lines.firstIndex(where: { NSLocationInRange(m.range.location, $0) }), idx + 1 < lines.count {
                 nameRange = lines[idx + 1]
             }
-            guard let nr = nameRange else { continue }
+            guard var nr = nameRange else { continue }
+            // "Client: Sunrise Dental Clinic, Jaipur" — the name ends at the first comma.
+            let comma = (sub(nr) as NSString).range(of: ",")
+            if comma.location != NSNotFound && comma.location >= 3 { nr = NSRange(location: nr.location, length: comma.location) }
             let normalizedRole: String
             switch role.lowercased() {
             case let r where r.contains("bill") || r.contains("invoice to"): normalizedRole = "Client"
@@ -217,10 +240,10 @@ private struct Context {
         (Pattern(#"effective\s+(?:date|from|as\s+of|on)|with\s+effect\s+from|w\.?\s?e\.?\s?f\.?|commenc(?:e|es|ing|ement)|start(?:s|ing)?\s+(?:on|from)"#), 1, false),
         (Pattern(#"(?:made|entered\s+into|executed|signed)\s+(?:and\s+(?:entered\s+into|executed)\s+)?(?:on|at\s+[A-Za-z ]+\s+on|this)|\bdated\b|(?:agreement|contract)\s+date"#), 2, false),
         (Pattern(#"(?:invoice|quotation|quote|bill)\s+date\s*[:\-–]?"#), 3, true),
-        (Pattern(#"^[ \t]*date[ \t]*[:\-–]"#, anchorsMatchLines: true), 4, true),
+        (Pattern(#"^[ \t]*date[ \t]*[:\-–]|(?<![a-z] )\bdate[ \t]*:"#, anchorsMatchLines: true), 4, true),
     ]
 
-    static let periodRange = Pattern(#"(?:from|commencing(?:\s+on)?|beginning(?:\s+on)?|starting(?:\s+on)?|w\.?e\.?f\.?)\s+(\S[^\n]{4,28}?)\s+(?:to|till|until|up\s*to|through)\s+(\S[^\n]{4,28}?)(?=[\s.,;)]|$)"#)
+    static let periodRange = Pattern(#"(?:from|commencing(?:\s+on)?|beginning(?:\s+on)?|starting(?:\s+on)?|w\.?e\.?f\.?|period\s+of|term\s+of)\s+(\S[^\n]{4,28}?)\s+(?:to|till|until|up\s*to|through)\s+(\S[^\n]{4,28}?)(?=[\s.,;)]|$)"#)
 
     /// "from 01/09/2026 to 28/02/2027": start and end of a period, when both parse as dates.
     func periodDates() -> (start: DateMention, end: DateMention, container: NSRange)? {
@@ -411,6 +434,7 @@ private struct Context {
         }
         guard let b = best else { return }
         totalAmountRange = b.mention.range
+        totalIsExplicit = b.score >= 3
         add(.totalAmount, .money(b.mention.money), range: quoteRange(value: b.mention.range, within: b.container),
             strength: b.score >= 3 ? .strong : .weak)
     }
@@ -453,21 +477,40 @@ private struct Context {
         return recurring ? "Recurring payment" : "Payment"
     }
 
+    static let paymentHeading = Pattern(#"^[ \t]*(?:\d+[.)]\s*)?(?:payment(?:\s+terms|\s+schedule)?|fees?(?:\s+and\s+payment)?|milestones?)[ \t]*:?[ \t]*$"#, anchorsMatchLines: true)
+    static let splitInto = Pattern(#"(?:in|by|across)\s+(?:two|three|four|five|six|\d{1,2})\s+(?:equal\s+)?(?:parts|instal+ments|tranches|payments|milestones)"#)
+    static let withinEvent = Pattern(#"within\s+\d{1,3}\s+(?:business\s+|working\s+)?days?\s+(?:of|from|after)\s+[a-z]"#)
+
+    /// Units that sit in a list under a "Payment:" heading.
+    func underPaymentHeading(_ s: NSRange) -> Bool {
+        guard let heading = Context.paymentHeading.matches(in: text).last(where: { $0.range.location < s.location }) else { return false }
+        let between = NSRange(location: heading.range.location, length: s.location - heading.range.location)
+        // Stop at a blank line or another heading-like line between them.
+        return !sub(between).contains("\n\n") && between.length < 600
+    }
+
     mutating func extractPayments() {
         var emitted: [(Money, CalendarDate?)] = []
         var frequencyEmitted = false
         let isInvoice = docType == .invoice || docType == .quotation
 
         for s in sentences {
-            guard Context.paymentContext.firstMatch(in: text, range: s) != nil,
+            guard Context.paymentContext.firstMatch(in: text, range: s) != nil || underPaymentHeading(s),
                   Context.penaltyContext.firstMatch(in: text, range: s) == nil,
                   Context.pastPayment.firstMatch(in: text, range: s) == nil,
                   Context.exampleContext.firstMatch(in: text, range: s) == nil else { continue }
             var mentions = amounts(in: s)
             // Drop amount-in-words that repeat a numeric amount in the same sentence.
             mentions = mentions.filter { m in !(m.fromWords && mentions.contains { !$0.fromWords && $0.money == m.money }) }
+            // "Rs. 1,20,000 in two parts: …" — the amount being split is not itself a payment.
+            mentions.removeAll { m in
+                let after = NSRange(location: m.range.location + m.range.length, length: min(40, s.location + s.length - m.range.location - m.range.length))
+                return Context.splitInto.firstMatch(in: text, range: after).map { $0.range.location - after.location < 6 } ?? false
+            }
             // The total amount itself is not an instalment.
-            if let t = totalAmountRange { mentions.removeAll { NSIntersectionRange($0.range, t).length > 0 } }
+            // (A fee named only in a payment sentence — "will pay Rs. 45,000 within 30 days of…" —
+            // is both the value and the payment.)
+            if let t = totalAmountRange, totalIsExplicit { mentions.removeAll { NSIntersectionRange($0.range, t).length > 0 } }
             // Nor are subtotals and tax lines.
             if Context.subtotal.firstMatch(in: text, range: s) != nil && s.length < 90 { continue }
             guard !mentions.isEmpty else { continue }
@@ -482,8 +525,8 @@ private struct Context {
             let sentenceRelatives = relatives(in: s)
             let freq = recurrence(in: s)
             // For a single "total ... payable in instalments" sentence without dates, skip.
-            if sentenceDates.isEmpty && sentenceRelatives.isEmpty && freq == nil && !isDueWithoutDate(s)
-                && Context.dueEvent.firstMatch(in: text, range: s) == nil { continue }
+            let eventDue = Context.dueEvent.firstMatch(in: text, range: s) ?? Context.withinEvent.firstMatch(in: text, range: s)
+            if sentenceDates.isEmpty && sentenceRelatives.isEmpty && freq == nil && !isDueWithoutDate(s) && eventDue == nil { continue }
 
             // "three equal instalments of Rs 20,000 each payable on A, B and C"
             let lower = sub(s).lowercased()
@@ -501,14 +544,18 @@ private struct Context {
             for (i, mention) in mentions.enumerated() {
                 defer { previousEnd = mention.range.location + mention.range.length }
                 var due: DateValue?
+                var dueRange: NSRange?
                 var notes: [String] = []
                 if sentenceDates.count == mentions.count {
                     let d = sentenceDates[i]
                     due = DateValue(date: d.date, ambiguousFormat: d.ambiguous)
+                    dueRange = lineOrSentence(d.range)
                 } else if let d = nearest(sentenceDates, to: mention.range) {
                     due = DateValue(date: d.date, ambiguousFormat: d.ambiguous)
+                    dueRange = lineOrSentence(d.range)
                 } else if let rel = nearest(sentenceRelatives, to: mention.range) {
                     due = .relative(rel.spec)
+                    dueRange = lineOrSentence(rel.range)
                 }
                 var rec: Recurrence?
                 if let freq {
@@ -516,8 +563,9 @@ private struct Context {
                     if due == nil {
                         if let dm = Context.dayOfMonth.firstMatch(in: text, range: s), let day = Int(dm.group(1, in: ns) ?? ""), (1...31).contains(day) {
                             if let start = effectiveDate {
-                                due = DateValue(date: Context.firstOccurrence(day: day, onOrAfter: start))
-                                notes.append("Due on day \(day) of each month, starting from the effective date \(start.numericString).")
+                                due = DateValue(date: Context.firstOccurrence(day: day, onOrAfter: start),
+                                                computedFrom: "day \(day) of each month, first on or after the start date \(start.numericString)")
+                                dueRange = dm.range
                             } else {
                                 notes.append("Due on day \(day) of each month; the start date could not be determined.")
                             }
@@ -526,22 +574,27 @@ private struct Context {
                         }
                     }
                 }
-                if due == nil && isInvoice, let dueDate = invoiceDueDate() {
-                    due = DateValue(date: dueDate)
+                if due == nil && isInvoice, let found = invoiceDueDate() {
+                    due = DateValue(date: found.date)
+                    dueRange = found.range
                 }
                 let label = localLabel(for: mention, previousEnd: previousEnd, in: s, recurring: rec != nil)
                 if due == nil {
                     let window = NSRange(location: mention.range.location, length: min(s.location + s.length - mention.range.location, 60))
                     if let ev = Context.dueEvent.firstMatch(in: text, range: window) {
                         notes.append("Due \(sub(ev.range).trimmed()) (no calendar date).")
+                    } else if let ev = Context.withinEvent.firstMatch(in: text, range: s) {
+                        let phrase = sentence(containing: ev.range.location).map { sub(NSRange(location: ev.range.location, length: min(80, $0.location + $0.length - ev.range.location))) } ?? sub(ev.range)
+                        notes.append("Due \(phrase.trimmed().trimmingCharacters(in: CharacterSet(charactersIn: "."))) (no calendar date).")
                     }
                 }
                 let key = (mention.money, due?.resolved)
                 if due != nil, emitted.contains(where: { $0.0 == key.0 && $0.1 == key.1 }) { continue }
                 emitted.append(key)
                 let value = PaymentValue(amount: mention.money, due: due, label: label, recurrence: rec)
-                add(.payment, .payment(value), range: quoteRange(value: mention.range, within: s),
-                    strength: due != nil ? .strong : .weak, notes: notes)
+                let quote = quoteRange(value: mention.range, within: s)
+                add(.payment, .payment(value), range: quote, strength: due != nil ? .strong : .weak, notes: notes,
+                    extra: dueRange.map { [$0] } ?? [])
                 if let freq, !frequencyEmitted {
                     frequencyEmitted = true
                     add(.paymentFrequency, .frequency(freq), range: quoteRange(value: mention.range, within: s), strength: .strong)
@@ -549,16 +602,45 @@ private struct Context {
             }
         }
 
+        // Payment schedule tables: rows with a date and an amount under a header naming both.
+        for (idx, header) in lines.enumerated() {
+            let h = sub(header).lowercased()
+            guard (h.contains("due") || h.contains("date")) && (h.contains("amount") || h.contains("rs") || h.contains("inr") || h.contains("₹") || h.contains("fee")),
+                  dates(in: header).isEmpty else { continue }
+            for row in lines[(idx + 1)...] {
+                if row.location - (header.location + header.length) > 2000 { break }
+                let rowText = sub(row).lowercased()
+                if rowText.contains("total") || rowText.trimmed().isEmpty { break }
+                let rowDates = dates(in: row)
+                guard rowDates.count == 1, let d = rowDates.first else { continue }
+                var money = amounts(in: row).first?.money
+                var moneyRange = amounts(in: row).first?.range
+                if money == nil, let bare = Pattern(#"(?<![\d.,/])\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?(?![\d,/])"#).matches(in: text, range: row).last {
+                    money = AmountParser.makeMoney(number: sub(bare.range), multiplier: nil, currency: "INR")
+                    moneyRange = bare.range
+                }
+                guard let amount = money, let mr = moneyRange, !emitted.contains(where: { $0.0 == amount && $0.1 == d.date }) else { continue }
+                if mr.location < d.range.location + d.range.length && NSIntersectionRange(mr, d.range).length > 0 { continue }
+                emitted.append((amount, d.date))
+                let label = sub(NSRange(location: row.location, length: max(0, min(d.range.location, mr.location) - row.location))).trimmed()
+                add(.payment, .payment(PaymentValue(amount: amount, due: DateValue(date: d.date, ambiguousFormat: d.ambiguous),
+                                                    label: label.isEmpty ? "Payment" : label.collapsingWhitespace())),
+                    range: row, strength: .strong)
+            }
+        }
+
         // Invoices: the total is payable on the due date.
-        if isInvoice, emitted.isEmpty, let t = totalAmountRange, let total = amounts.first(where: { $0.range == t }) {
+        if isInvoice, emitted.isEmpty, let t = totalAmountRange,
+           let total = (amounts + tableTotalMentions()).first(where: { $0.range == t }) {
             let dueDate = invoiceDueDate()
             let rel = invoiceRelativeDue()
-            let due: DateValue? = dueDate.map { DateValue(date: $0) } ?? rel.map { .relative($0) }
+            let due: DateValue? = dueDate.map { DateValue(date: $0.date) } ?? rel.map { .relative($0.spec) }
+            let dueRange = dueDate?.range ?? rel.map { lineOrSentence($0.range) }
             let label = docType == .quotation ? "Quoted amount" : "Invoice payment"
             let value = PaymentValue(amount: total.money, due: due, label: label)
             let container = sentence(containing: t.location)
             add(.payment, .payment(value), range: quoteRange(value: t, within: container), strength: due != nil ? .strong : .weak,
-                notes: due == nil ? ["No due date was found on the invoice."] : [])
+                notes: due == nil ? ["No due date was found on the invoice."] : [], extra: dueRange.map { [$0] } ?? [])
         }
     }
 
@@ -588,21 +670,30 @@ private struct Context {
         return str.contains("on signing") || str.contains("upon signing") || str.contains("advance")
     }
 
-    func invoiceDueDate() -> CalendarDate? {
+    /// The due date on an invoice and the line it is on.
+    func invoiceDueDate() -> (date: CalendarDate, range: NSRange)? {
         for m in Context.dueLabel.matches(in: text) {
             guard let line = lines.first(where: { NSLocationInRange(m.range.location, $0) }) else { continue }
-            if let d = dates(in: line).first(where: { $0.range.location >= m.range.location }) { return d.date }
-            if let idx = lines.firstIndex(of: line), idx + 1 < lines.count, let d = dates(in: lines[idx + 1]).first { return d.date }
+            if let d = dates(in: line).first(where: { $0.range.location >= m.range.location }) { return (d.date, line) }
+            if let idx = lines.firstIndex(of: line), idx + 1 < lines.count, let d = dates(in: lines[idx + 1]).first {
+                return (d.date, NSRange(location: line.location, length: lines[idx + 1].location + lines[idx + 1].length - line.location))
+            }
         }
         return nil
     }
 
-    func invoiceRelativeDue() -> RelativeDateSpec? {
+    func invoiceRelativeDue() -> (spec: RelativeDateSpec, range: NSRange)? {
         relatives.first { $0.spec.anchor == .invoiceDate }.map { rel in
             var spec = rel.spec
             spec.baseDate = effectiveDate
-            return spec
+            return (spec, rel.range)
         }
+    }
+
+    /// The line (if short) or sentence containing a range, as a readable quote.
+    func lineOrSentence(_ r: NSRange) -> NSRange {
+        if let line = lines.first(where: { NSLocationInRange(r.location, $0) }), line.length <= 200 { return line }
+        return sentence(containing: r.location).map { quoteRange(value: r, within: $0) } ?? r
     }
 
     func nearest(_ items: [DateMention], to r: NSRange) -> DateMention? {

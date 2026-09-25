@@ -1,0 +1,20 @@
+INVOICE
+
+Rana Digital Studio
+New Delhi, India
+GSTIN: 07ABCPR1234K1Z2
+
+Invoice No: RDS/EXP/007
+Invoice Date: 20 October 2026
+
+Bill To:
+Brightline Media LLC
+Austin, Texas
+
+Description                          Amount
+UI design sprint (2 weeks)       USD 2,400.00
+Prototype revisions              USD   600.00
+Total                            USD 3,000.00
+
+Equivalent for reference only: approx. INR 2,50,000 at today's rate.
+Payment terms: Net 30 from invoice date.

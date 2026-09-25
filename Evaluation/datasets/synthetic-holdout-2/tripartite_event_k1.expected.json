@@ -1,0 +1,13 @@
+{
+  "document_type": "contract",
+  "parties": ["Horizon Events Private Limited", "Rana Digital Studio", "Soundwave AV Rentals"],
+  "effective_date": "2026-11-05",
+  "end_date": "2027-01-31",
+  "payments": [
+    {"amount": 60000, "due_date": "2026-11-15"},
+    {"amount": 60000, "due_date": "2027-01-15"},
+    {"amount": 90000, "due_date": "2026-12-10"}
+  ],
+  "notice_period_days": 21,
+  "renewal_automatic": null
+}

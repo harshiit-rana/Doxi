@@ -1,0 +1,14 @@
+PAYMENT SCHEDULE - ANNEXURE B
+
+Project : Mobile app for Fresh Basket
+Client  : Fresh Basket Retail Pvt Ltd
+Vendor  : Rana Digital Studio
+
+Milestone            Due date        Amount (Rs)
+Kick-off             O1/12/2026      50,OOO
+Beta release         15/01/2O27      75,000
+Store launch         28/02/2027      75,000
+
+Total                                2,00,000
+
+A11 amounts exclusive of GST.

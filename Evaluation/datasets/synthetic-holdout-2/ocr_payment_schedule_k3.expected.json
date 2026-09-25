@@ -1,0 +1,10 @@
+{
+  "document_type": "payment_schedule",
+  "parties": ["Fresh Basket Retail Pvt Ltd", "Rana Digital Studio"],
+  "total_amount": 200000,
+  "payments": [
+    {"amount": 50000, "due_date": "2026-12-01"},
+    {"amount": 75000, "due_date": "2027-01-15"},
+    {"amount": 75000, "due_date": "2027-02-28"}
+  ]
+}

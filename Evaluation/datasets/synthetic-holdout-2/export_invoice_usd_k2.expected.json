@@ -1,0 +1,10 @@
+{
+  "document_type": "invoice",
+  "parties": ["Rana Digital Studio", "Brightline Media LLC"],
+  "effective_date": "2026-10-20",
+  "total_amount": 3000,
+  "payments": [
+    {"amount": 3000, "due_date": "2026-11-19"}
+  ],
+  "identifiers": ["07ABCPR1234K1Z2"]
+}

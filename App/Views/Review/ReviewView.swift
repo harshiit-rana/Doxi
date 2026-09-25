@@ -46,6 +46,7 @@ struct ReviewView: View {
                         ForEach(fields) { field in
                             FieldReviewRow(field: field, document: document,
                                            onSource: { f in if let s = f.source { sourceItem = SourceItem(source: s, label: f.kind.displayName) } },
+                                           onSourceSpan: { s, f in sourceItem = SourceItem(source: s, label: f.kind.displayName) },
                                            onEdit: { f in editing = EditTarget(kind: f.kind, field: f) })
                         }
                     } header: {
@@ -235,6 +236,7 @@ struct FieldReviewRow: View {
     let field: ExtractedFieldRecord
     let document: DocumentRecord
     var onSource: (ExtractedFieldRecord) -> Void
+    var onSourceSpan: (SourceSpan, ExtractedFieldRecord) -> Void
     var onEdit: (ExtractedFieldRecord) -> Void
     @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var context
@@ -260,6 +262,10 @@ struct FieldReviewRow: View {
             if let source = field.source {
                 Button { onSource(field) } label: { SourceQuoteView(source: source) }
                     .buttonStyle(.plain)
+                ForEach(Array(field.additionalSources.enumerated()), id: \.offset) { _, extra in
+                    Button { onSourceSpan(extra, field) } label: { SourceQuoteView(source: extra) }
+                        .buttonStyle(.plain)
+                }
             } else if field.origin != .user {
                 Label("Not found in the document text", systemImage: "questionmark.diamond").font(.caption).foregroundStyle(.red)
             }

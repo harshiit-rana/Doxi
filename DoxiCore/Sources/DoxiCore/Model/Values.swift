@@ -207,11 +207,15 @@ public struct DateValue: Codable, Hashable, Sendable {
     public var relative: RelativeDateSpec?
     /// True when the numeric format could be read as either DD/MM or MM/DD.
     public var ambiguousFormat: Bool
+    /// Set when `date` was calculated rather than written (e.g. "5th of each month"
+    /// starting from the effective date); explains how.
+    public var computedFrom: String?
 
-    public init(date: CalendarDate?, relative: RelativeDateSpec? = nil, ambiguousFormat: Bool = false) {
+    public init(date: CalendarDate?, relative: RelativeDateSpec? = nil, ambiguousFormat: Bool = false, computedFrom: String? = nil) {
         self.date = date
         self.relative = relative
         self.ambiguousFormat = ambiguousFormat
+        self.computedFrom = computedFrom
     }
 
     /// A date derived from a relative phrase. `date` stays nil: the document does not
@@ -221,7 +225,15 @@ public struct DateValue: Codable, Hashable, Sendable {
     }
 
     /// True when the date was computed rather than written in the document.
-    public var isDerived: Bool { date == nil && relative != nil }
+    public var isDerived: Bool { (date == nil && relative != nil) || computedFrom != nil }
+
+    /// How a derived date was calculated, for display.
+    public var derivation: String? {
+        if let computedFrom { return computedFrom }
+        guard date == nil, let rel = relative else { return nil }
+        if let base = rel.baseDate { return "\(rel.phrase), base date \(base.numericString)" }
+        return "\(rel.phrase); the base date is not known yet"
+    }
 
     /// The concrete date: stated, or derived from the base date.
     public var resolved: CalendarDate? { date ?? relative?.derivedDate }
@@ -233,6 +245,7 @@ public struct DateValue: Codable, Hashable, Sendable {
             }
             return rel.phrase.prefix(1).uppercased() + rel.phrase.dropFirst() + " (base date unknown)"
         }
+        if let date, let computedFrom { return "\(date.numericString) (calculated: \(computedFrom))" }
         return date?.numericString ?? "—"
     }
 }

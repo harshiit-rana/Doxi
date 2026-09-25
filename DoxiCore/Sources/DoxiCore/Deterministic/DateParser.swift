@@ -118,9 +118,18 @@ public enum RelativeDateParser {
     static let anchor = #"((?:the\s+)?date\s+of\s+(?:this\s+)?(?:agreement|contract|signing|execution|invoice|receipt\s+of\s+(?:the\s+|an\s+|each\s+)?invoice)|(?:the\s+)?signing(?:\s+of\s+this\s+(?:agreement|contract))?|(?:the\s+)?execution(?:\s+of\s+this\s+(?:agreement|contract))?|(?:the\s+)?effective\s+date|(?:the\s+)?commencement(?:\s+date)?|(?:the\s+)?(?:invoice\s+date|receipt\s+of\s+(?:the\s+|an\s+|each\s+)?invoice|invoice)|(?:the\s+)?(?:expiry|expiration|end|termination)(?:\s+date)?(?:\s+of\s+(?:this|the)\s+(?:agreement|term|contract))?|(?:the\s+)?(?:completion|delivery|acceptance)(?:\s+of\s+(?:the\s+)?[a-z]+(?:\s+[a-z]+)?)?)"#
     static let pattern = Pattern(#"(?:within\s+)?"# + quantity + #"(?:business\s+|working\s+|calendar\s+)?(days?|weeks?|months?|years?)'?\s+(after|from|of|following|before|prior\s+to|preceding)\s+"# + anchor)
 
+    /// "Net 30" payment terms: 30 days after the invoice date.
+    static let netTerms = Pattern(#"\bnet[\s-]*(\d{1,3})(?:\s*days)?\b"#)
+
     public static func mentions(in text: String) -> [RelativeDateMention] {
         let ns = text as NSString
-        return pattern.matches(in: text).compactMap { m in
+        let net = netTerms.matches(in: text).compactMap { m -> RelativeDateMention? in
+            guard let v = Int(m.group(1, in: ns) ?? ""), v > 0 else { return nil }
+            return RelativeDateMention(range: m.range, spec: RelativeDateSpec(offset: Duration(value: v, unit: .days), after: true,
+                                                                              anchor: .invoiceDate, anchorText: "the invoice date"),
+                                       text: ns.substring(with: m.range))
+        }
+        return net + pattern.matches(in: text).compactMap { m in
             let qty = m.group(2, in: ns).flatMap { Int($0) } ?? NumberWords.parseInt(m.group(1, in: ns) ?? "")
             guard let value = qty, value > 0, let unitWord = m.group(3, in: ns), let dir = m.group(4, in: ns),
                   let anchorText = m.group(5, in: ns) else { return nil }

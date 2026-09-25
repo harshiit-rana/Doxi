@@ -1,0 +1,10 @@
+{
+  "document_type": "nda",
+  "parties": ["Veritas Legal Tech LLP", "Harshit Rana"],
+  "effective_date": "2026-12-07",
+  "end_date": "2029-12-06",
+  "total_amount": null,
+  "payments": [],
+  "notice_period_days": 60,
+  "renewal_automatic": true
+}

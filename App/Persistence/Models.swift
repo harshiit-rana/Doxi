@@ -162,6 +162,8 @@ final class ExtractedFieldRecord {
     var confidenceRaw: String
     var verificationRaw: String
     var sourceData: Data?
+    /// Further supporting spans (JSON [SourceSpan]), e.g. an invoice's due-date line.
+    var additionalSourcesData: Data?
     var notes: [String]
     var conflictGroup: String?
     var ruleStrengthRaw: String?
@@ -180,6 +182,7 @@ final class ExtractedFieldRecord {
         self.confidenceRaw = draft.confidence.rawValue
         self.verificationRaw = draft.verification.rawValue
         self.sourceData = nil
+        self.additionalSourcesData = draft.additionalSources.flatMap { try? JSONEncoder().encode($0) }
         self.notes = draft.notes
         self.conflictGroup = draft.conflictGroup
         self.ruleStrengthRaw = draft.ruleStrength?.rawValue
@@ -205,6 +208,10 @@ final class ExtractedFieldRecord {
         set { sourceData = newValue.flatMap { try? JSONEncoder().encode($0) } }
     }
 
+    var additionalSources: [SourceSpan] {
+        additionalSourcesData.flatMap { try? JSONDecoder().decode([SourceSpan].self, from: $0) } ?? []
+    }
+
     var origin: FieldOrigin {
         get { FieldOrigin(rawValue: originRaw) ?? .deterministic }
         set { originRaw = newValue.rawValue }
@@ -228,7 +235,8 @@ final class ExtractedFieldRecord {
     var draft: ExtractedFieldDraft {
         ExtractedFieldDraft(id: id, kind: kind, value: value, origin: origin, source: source, confidence: confidence,
                             verification: verification, notes: notes, conflictGroup: conflictGroup,
-                            ruleStrength: ruleStrengthRaw.flatMap(RuleStrength.init(rawValue:)), valueVerifiedInSource: valueVerifiedInSource)
+                            ruleStrength: ruleStrengthRaw.flatMap(RuleStrength.init(rawValue:)), valueVerifiedInSource: valueVerifiedInSource,
+                            additionalSources: additionalSources.isEmpty ? nil : additionalSources)
     }
 }
 

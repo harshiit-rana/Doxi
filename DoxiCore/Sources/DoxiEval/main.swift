@@ -86,8 +86,8 @@ struct FieldScore {
     mutating func add(_ c: Double, of t: Double = 1) { correct += c; total += t }
 }
 
-let reportedFields = ["Document type", "Parties", "Effective date", "End date", "Total amount", "Payments",
-                      "Notice period", "Renewal", "Identifiers", "Source matching"]
+let reportedFields = ["Document type", "Parties", "Dates", "  Effective date", "  End date", "Amounts", "Payments",
+                      "Renewal", "Notice period", "Obligations", "Identifiers", "Source matching"]
 
 struct DocumentReport {
     var name: String
@@ -115,7 +115,7 @@ func accepted(_ fields: [ExtractedFieldDraft], _ kind: FieldKind) -> [ExtractedF
     fields.filter { $0.kind == kind }.sorted { $0.confidence > $1.confidence }
 }
 
-func score(fields: [ExtractedFieldDraft], expected: [String: Any], name: String) -> DocumentReport {
+func score(fields: [ExtractedFieldDraft], document: DocumentText, expected: [String: Any], name: String) -> DocumentReport {
     var rep = DocumentReport(name: name)
     func record(_ field: String, _ ok: Bool, _ detail: @autoclosure () -> String, confidence: Confidence?) {
         rep.scores[field, default: FieldScore()].add(ok ? 1 : 0)
@@ -144,7 +144,7 @@ func score(fields: [ExtractedFieldDraft], expected: [String: Any], name: String)
         if value < 1 { rep.mistakes.append("Parties: expected \(want), got \(got)") }
     }
 
-    for (key, kind, label) in [("effective_date", FieldKind.effectiveDate, "Effective date"), ("end_date", .endDate, "End date")] {
+    for (key, kind, label) in [("effective_date", FieldKind.effectiveDate, "  Effective date"), ("end_date", .endDate, "  End date")] {
         guard expected.keys.contains(key) else { continue }
         let want = (expected[key] as? String).flatMap(CalendarDate.init(iso:))
         let got = accepted(fields, kind).first
@@ -156,7 +156,7 @@ func score(fields: [ExtractedFieldDraft], expected: [String: Any], name: String)
         let want = amountMinor(expected["total_amount"])
         let got = accepted(fields, .totalAmount).first
         let gotMinor = got?.value.primaryAmount?.minorUnits
-        record("Total amount", want == gotMinor, "expected \(want.map { Money(minorUnits: $0).formatted } ?? "none"), got \(gotMinor.map { Money(minorUnits: $0).formatted } ?? "none")", confidence: got?.confidence)
+        record("Amounts", want == gotMinor, "expected \(want.map { Money(minorUnits: $0).formatted } ?? "none"), got \(gotMinor.map { Money(minorUnits: $0).formatted } ?? "none")", confidence: got?.confidence)
     }
 
     if let want = expected["payments"] as? [[String: Any]] {
@@ -220,11 +220,45 @@ func score(fields: [ExtractedFieldDraft], expected: [String: Any], name: String)
         if value < 1 { rep.mistakes.append("Identifiers: expected \(want), got \(got)") }
     }
 
-    // Source matching: extracted facts that point at text actually containing them.
-    let sourced = fields.filter { $0.kind != .clause }
-    for f in sourced {
-        let ok = f.source != nil && (f.source!.match == .exact || f.source!.match == .normalized) && f.valueVerifiedInSource != false
+    // Dates: combined effective + end date accuracy.
+    let dateScores = ["  Effective date", "  End date"].compactMap { rep.scores[$0] }
+    if !dateScores.isEmpty {
+        rep.scores["Dates"] = FieldScore(correct: dateScores.reduce(0) { $0 + $1.correct }, total: dateScores.reduce(0) { $0 + $1.total })
+    }
+
+    // Obligations that would be tracked if the user accepted every extracted detail.
+    if let want = expected["obligations"] as? [[String: Any]] {
+        var accepted = fields
+        for i in accepted.indices { accepted[i].verification = .confirmed }
+        let got = ObligationBuilder.build(from: accepted, context: ObligationContext(parties: [], userParty: nil, userIsNeither: false))
+        var used = Set<Int>()
+        var matched = 0
+        for w in want {
+            let category = (w["category"] as? String).flatMap(ObligationCategory.init(rawValue:))
+            let due = (w["due_date"] as? String).flatMap(CalendarDate.init(iso:))
+            if let i = got.indices.first(where: { !used.contains($0) && got[$0].category == category && got[$0].dueDate == due }) {
+                used.insert(i)
+                matched += 1
+            }
+        }
+        let value = f1(expected: want.count, extracted: got.count, matched: matched)
+        rep.scores["Obligations", default: FieldScore()].add(value)
+        if value < 1 {
+            rep.mistakes.append("Obligations: expected \(want.count), matched \(matched), got \(got.map { "\($0.category.rawValue)@\($0.dueDate?.isoString ?? "none")" })")
+        }
+    }
+
+    // Source matching: every extracted fact must point at document text that
+    // actually contains its value (re-checked here, independent of the extractor).
+    let matcher = SourceMatcher(document: document)
+    for f in fields where ![.clause, .title, .documentType].contains(f.kind) {
+        var ok = false
+        if let span = f.source, span.match != .fuzzy {
+            let ranges = f.allSources.compactMap { matcher.fullTextRange(of: $0) }
+            ok = matcher.verify(f.value, inAny: ranges) != .notFound
+        }
         rep.scores["Source matching", default: FieldScore()].add(ok ? 1 : 0)
+        if !ok { rep.mistakes.append("Source: \(f.kind.rawValue) “\(f.displayValue)” — \(f.source.map { "highlighted text does not support it: “\($0.quote.prefix(80))”" } ?? "no source")") }
     }
     return rep
 }
@@ -268,7 +302,7 @@ for folder in options.folders {
             continue
         }
         let outcome = await pipeline.run(text, today: options.today)
-        var rep = score(fields: outcome.fields, expected: expected, name: "\(dir.lastPathComponent)/\(docURL.lastPathComponent)")
+        var rep = score(fields: outcome.fields, document: text, expected: expected, name: "\(dir.lastPathComponent)/\(docURL.lastPathComponent)")
         rep.warnings = outcome.warnings
         reports.append(rep)
         if options.verbose {

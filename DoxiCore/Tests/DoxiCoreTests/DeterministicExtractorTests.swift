@@ -94,3 +94,16 @@ final class DeterministicExtractorTests: XCTestCase {
         XCTAssertEqual(Fixtures.field(f, .effectiveDate)?.value.primaryDate?.isoString, "2026-09-05")
     }
 }
+
+final class ClassifierStabilityTests: XCTestCase {
+    func testShortNDAIsClassifiedDeterministically() {
+        let text = """
+        ONE-WAY NON-DISCLOSURE AGREEMENT
+        This Agreement is made on 7 December 2026 between Veritas LLP and Harshit Rana.
+        This Agreement shall renew automatically.
+        """
+        for _ in 0..<20 {
+            XCTAssertEqual(DocumentClassifier.classify(text)?.type, .nda)
+        }
+    }
+}

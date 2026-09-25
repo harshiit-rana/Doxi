@@ -104,3 +104,38 @@ final class SemanticFalsePositiveTests: XCTestCase {
         XCTAssertTrue(f.allSatisfy { $0.value.primaryDate == nil })
     }
 }
+
+final class OCRDigitTests: XCTestCase {
+    func testRepairsDigitsInsideNumbersOnly() {
+        XCTAssertEqual(OCRDigits.normalize("O1/12/2026 50,OOO 15/01/2O27"), "01/12/2026 50,000 15/01/2027")
+        XCTAssertEqual(OCRDigits.normalize("All amounts, Ill, IO, A11, Rs.l"), "All amounts, Ill, IO, A11, Rs.l")
+        XCTAssertEqual(OCRDigits.normalize("abc").utf16.count, 3)
+    }
+
+    func testScheduleTableWithOCRNoise() {
+        let text = """
+        PAYMENT SCHEDULE
+        Milestone      Due date      Amount (Rs)
+        Kick-off       O1/12/2026    50,OOO
+        Launch         28/02/2027    75,000
+        Total                        1,25,000
+        """
+        let f = DeterministicExtractor().extract(DocumentText(plainText: text))
+        let payments = f.compactMap { x -> PaymentValue? in if case .payment(let p) = x.value { return p }; return nil }
+        XCTAssertEqual(payments.map { $0.due?.date?.isoString }, ["2026-12-01", "2027-02-28"])
+        XCTAssertEqual(payments.map { $0.amount?.minorUnits }, [5_000_000, 7_500_000])
+        XCTAssertEqual(payments.first?.label, "Kick-off")
+        // The source quote shows the document as scanned.
+        XCTAssertTrue(f.first { $0.kind == .payment }?.source?.quote.contains("O1/12/2026") ?? false)
+    }
+
+    func testNetTermsAreRelativeToInvoiceDate() {
+        let text = "INVOICE\nInvoice Date: 20 October 2026\nTotal USD 3,000.00\nPayment terms: Net 30 from invoice date."
+        let f = DeterministicExtractor().extract(DocumentText(plainText: text))
+        var fields = f
+        RelativeDateResolver.resolve(&fields)
+        guard case .payment(let p)? = fields.first(where: { $0.kind == .payment })?.value else { return XCTFail() }
+        XCTAssertEqual(p.due?.resolved?.isoString, "2026-11-19")
+        XCTAssertTrue(p.due?.isDerived ?? false)
+    }
+}

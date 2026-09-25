@@ -259,6 +259,9 @@ struct DetailFieldRow: View {
                 if let derived = field.value.derivedDateExplanation { DerivedDateNote(explanation: derived) }
                 if let source = field.source {
                     SourceQuoteView(source: source)
+                    ForEach(Array(field.additionalSources.enumerated()), id: \.offset) { _, extra in
+                        SourceQuoteView(source: extra)
+                    }
                 } else {
                     Text(field.origin == .user ? "Added by you" : "No source found in the document")
                         .font(.caption).foregroundStyle(field.origin == .user ? Color.secondary : Color.red)

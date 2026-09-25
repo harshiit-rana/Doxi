@@ -192,6 +192,9 @@ public struct ExtractedFieldDraft: Codable, Hashable, Identifiable, Sendable {
     public var value: FieldValue
     public var origin: FieldOrigin
     public var source: SourceSpan?
+    /// Further places supporting parts of the value (e.g. an invoice's due-date line
+    /// when `source` is its total).
+    public var additionalSources: [SourceSpan]?
     public var confidence: Confidence
     public var verification: VerificationStatus
     /// Why the confidence is what it is. Shown to the user.
@@ -205,8 +208,10 @@ public struct ExtractedFieldDraft: Codable, Hashable, Identifiable, Sendable {
 
     public init(id: UUID = UUID(), kind: FieldKind, value: FieldValue, origin: FieldOrigin, source: SourceSpan?,
                 confidence: Confidence = .unverified, verification: VerificationStatus = .pending, notes: [String] = [],
-                conflictGroup: String? = nil, ruleStrength: RuleStrength? = nil, valueVerifiedInSource: Bool? = nil) {
+                conflictGroup: String? = nil, ruleStrength: RuleStrength? = nil, valueVerifiedInSource: Bool? = nil,
+                additionalSources: [SourceSpan]? = nil) {
         self.id = id
+        self.additionalSources = additionalSources
         self.kind = kind
         self.value = value
         self.origin = origin
@@ -220,4 +225,7 @@ public struct ExtractedFieldDraft: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var displayValue: String { value.displayString }
+
+    /// All source spans: the primary one first.
+    public var allSources: [SourceSpan] { (source.map { [$0] } ?? []) + (additionalSources ?? []) }
 }
