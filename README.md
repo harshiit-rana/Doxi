@@ -101,9 +101,18 @@ Only the recognised text is sent, and the app says so on the document. Default m
   party matching and payment direction, pipeline merging/conflicts/hallucination handling,
   Anthropic request/response/error mapping (mocked transport), obligations, recurrence,
   money totals, reminder planning (offsets, 64 limit, recurrence, stable IDs), search.
-- `AppTests`: SwiftData round-trips, identity matching, review → obligations, recurring payments.
+- `DoxiCore/Tests/DoxiReaderTests` (macOS): real PDFKit/Vision reading of generated text PDFs, scans, sideways scans and blank pages, with highlight rectangles checked against where the text was drawn.
+- `AppTests`: SwiftData round-trips, identity matching (including documents imported before onboarding), review → obligations, edited values, reminders only for confirmed open obligations, re-extraction, share-inbox import and cleanup, corrupt imports.
+- `AppUITests`: the full workflow end to end in the simulator (see docs/VALIDATION.md).
 - `Evaluation/`: per-document, per-field accuracy. **The real-document set still needs to
   be supplied** — see `Evaluation/README.md`.
+
+## Validation status
+
+See **[docs/VALIDATION.md](docs/VALIDATION.md)** for what has been tested, how, and the bugs found.
+In short: the build, 125 core tests, 6 PDFKit/Vision integration tests, 11 app tests and a full end-to-end UI test in the
+iOS simulator pass in CI. **No real documents and no physical device have been tested yet.** Accuracy figures so far come
+from synthetic documents only. Use `docs/DEVICE_TEST_CHECKLIST.md` and `Evaluation/README.md` to finish validation.
 
 ## Known limitations
 

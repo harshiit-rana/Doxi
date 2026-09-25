@@ -8,11 +8,11 @@ Nothing on this page should be read as real-document validation._
 ```text
 DOXI PHASE 1 VALIDATION
 
-Build:                       PASS  (app, share extension, unit and UI test targets; Xcode 26.3, iOS 26.2 SDK; no warnings in Doxi sources)
-Unit tests (DoxiCore):       PASS  — 131 tests, Linux and macOS
-Reader integration (macOS):  PASS  — 6 tests: real PDFKit + Vision on generated text PDFs, scans, a sideways scan, a blank page, corrupt/empty files
-App tests (simulator):       see "App and UI tests" below
-End-to-end UI test:          see "App and UI tests" below
+Build:                       PASS  (app, share extension, unit and UI test targets; Xcode 26.3, iOS 26.2 SDK; 0 compiler warnings in Doxi sources)
+Unit tests (DoxiCore):       125 passed / 0 failed (Linux and macOS)
+Reader integration (macOS):  6 passed / 0 failed — real PDFKit + Vision on generated text PDFs, scans, a sideways scan, a blank page, corrupt/empty files
+App tests (iOS simulator):   11 passed / 0 failed
+End-to-end UI test:          1 passed / 0 failed — the full Phase 1 workflow in the iPhone 16 Pro simulator (details below)
 
 Real documents tested:       0   ← the real evaluation set has not been supplied yet
 
@@ -29,10 +29,29 @@ Extraction accuracy — rules only, SYNTHETIC documents (not a real-world estima
   Document type                  60%                   80%                 100%
   High-confidence errors          1                     1                    0
 
-Search:            PASS in unit tests and (see below) the simulator run; not tested on device
+Search:            PASS (unit tests + simulator E2E: company, ₹ amount, OCR-only phrase; results open the right document); not tested on a device
 Notifications:     planning logic PASS in tests; delivery on a device NOT TESTED
 Share Extension:   builds and embeds; inbox import logic tested; on-device share flow NOT TESTED
 ```
+
+## End-to-end UI test (iOS simulator)
+
+`AppUITests/Phase1FlowUITests.testEndToEndWorkflow` launches the real app with two generated
+documents: a text-PDF freelance contract, and an image-only "scan" of an invoice whose text exists only as pixels. It then:
+
+1. completes onboarding with the name "Harshit Rana";
+2. waits for both documents to be processed (PDF text for the contract, **Vision OCR** for the scan) and reach "needs review";
+3. opens the contract from Documents; its title was generated from the extraction ("ABC Technologies Private Limited — Freelance Agreement");
+4. taps the Total amount row and checks the source view opens with the quote "The total project fee shall be INR 80,000";
+5. opens Review, checks that "Matched to your profile" is shown, taps a quote inside a review row (source opens), accepts the high-confidence details and confirms;
+6. accepts the system notification permission prompt;
+7. on Home, checks **Owed to me = ₹80,000** (two ₹40,000 instalments, direction from the user's role in the document) and that an upcoming instalment is listed;
+8. in Settings, checks that reminders were scheduled (non-zero);
+9. searches "Greenleaf", which exists only in the scanned invoice's pixels; the OCR'd invoice is found and opens;
+10. searches "80,000"; the contract is found with "Total amount: ₹80,000" as the matched detail, and opens;
+11. checks that the contract's text source is "PDF text" (not OCR).
+
+It passes (latest run: 183 s). It does **not** cover: the camera scanner, the Share Extension UI, notification *delivery*, Face ID, the Claude provider, or iPad.
 
 ## What was actually run
 
@@ -55,7 +74,9 @@ Share Extension:   builds and embeds; inbox import logic tested; on-device share
 Critical (would give wrong or unsupported information):
 1. **Derived dates were stored as if written in the document.** "Within 30 days of invoice", "5th of each month" and "a period of 11 months" produced plain dates. Fixed: stored as calculated, with the base date and rule shown ("Calculated: 30 days after invoice, base date 15/09/2026").
 2. **A surname or first name alone matched the user automatically** ("Rana", "Harshit Mehta"). Fixed: a single shared word only makes the party a candidate, and Doxi asks.
-3. **Tapping a field in the document screen did not open its source** (simulator E2E run; both sheet and push attempts failed when triggered from a Button inside a List row). Fixed by making the rows `NavigationLink`s; see the UI-test status below.
+3. **Tapping a field in the document screen did not open its source.** Found by the simulator E2E run: neither a sheet nor a push triggered from a plain-styled Button in the List row appeared. Fixed by making the rows `NavigationLink`s; the E2E test now covers it.
+3b. **Documents imported before onboarding were never matched to the user** (e.g. shared from WhatsApp before first launch). Payment direction stayed unknown and "Owed to me" showed ₹0. Found by the E2E run. Fixed: saving the profile re-matches documents whose identity the user hasn't chosen.
+3c. **Non-document files shared into Doxi stayed in the inbox forever** (renamed before import, but the old name was deleted), showing an error on every launch. Found by an app test. Fixed.
 4. **Already-paid amounts became payment obligations** ("has paid a security deposit", "received with thanks"). Fixed.
 5. **Document type was non-deterministic on short documents** (NDA vs contract tie decided by dictionary order). Fixed with a deterministic tie-break.
 
